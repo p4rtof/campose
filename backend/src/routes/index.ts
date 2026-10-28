@@ -9,6 +9,7 @@ import { freeSlots, monthStatus } from '../services/availability.service.js'
 import { createBooking, getBooking } from '../services/booking.service.js'
 import { createPayment, getPayment, markPaid, simulationEnabled } from '../services/payment.service.js'
 import { handleChat } from '../services/chat.service.js'
+import { handleMidtransNotification } from '../services/payment.service.js'
 
 export const routes = Router()
 
@@ -78,4 +79,9 @@ routes.get('/chat/sessions/:sessionId', wrap(async (req, res) => {
 }))
 routes.post('/partnership-leads', validate(S.leadBody), wrap(async (req, res) => {
   res.status(201).json(ok(await prisma.partnershipLead.create({ data: req.body })))
+}))
+
+routes.post('/payments/notification', wrap(async (req, res) => {
+  const result = await handleMidtransNotification(req.body)
+  res.status(200).json(result)
 }))
