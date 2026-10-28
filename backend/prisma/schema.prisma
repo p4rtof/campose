@@ -1,0 +1,244 @@
+// Campose - Prisma schema (PostgreSQL / Neon)
+// Letakkan di: backend/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────── ENUM ─────────────
+
+enum BookingStatus {
+  MENUNGGU_PEMBAYARAN // booking dibuat, DP belum masuk
+  TERKONFIRMASI       // DP lunas
+  SELESAI
+  DIBATALKAN
+}
+
+enum PaymentMethod {
+  QRIS
+  VA_BCA
+  VA_BNI
+  VA_BRI
+  VA_MANDIRI
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  EXPIRED
+  FAILED
+}
+
+enum DateStatus {
+  TERSEDIA
+  PENUH
+  DIBOOKING
+}
+
+enum Intent {
+  TANYA_HARGA
+  TANYA_JADWAL
+  BOOKING
+  KEMITRAAN
+  KELUHAN
+  LAINNYA
+}
+
+enum InquirySource {
+  WEB_CHAT
+  WHATSAPP   // data historis (dummy / hasil input manual)
+  FORM
+}
+
+enum AdminRole {
+  OWNER
+  ADMIN
+  CS
+}
+
+// ───────────── KATALOG ─────────────
+
+model Package {
+  id        Int       @id @default(autoincrement())
+  name      String                 // "2 Jam", "4 Jam", "8 Jam"
+  hours     Int
+  price     Int                    // rupiah, tanpa desimal
+  isPopular Boolean   @default(false)
+  isActive  Boolean   @default(true)
+  bookings  Booking[]
+}
+
+model Addon {
+  id       Int            @id @default(autoincrement())
+  name     String
+  price    Int
+  unit     String?                // "per orang", "per 10 menit", dst
+  isActive Boolean        @default(true)
+  items    BookingAddon[]
+}
+
+model Voucher {
+  code           String    @id     // "CAMPOSE10"
+  discountAmount Int
+  validFrom      DateTime?
+  validUntil     DateTime?
+  quota          Int?              // null = tanpa batas
+  used           Int       @default(0)
+  isActive       Boolean   @default(true)
+  bookings       Booking[]
+}
+
+model Review {
+  id          Int      @id @default(autoincrement())
+  name        String
+  rating      Int                  // 1-5
+  text        String
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// ───────────── BOOKING ─────────────
+
+model Booking {
+  id           String        @id @default(cuid())
+  code         String        @unique        // "CMP-2026-0001" (nomor invoice)
+  status       BookingStatus @default(MENUNGGU_PEMBAYARAN)
+
+  packageId    Int
+  package      Package       @relation(fields: [packageId], references: [id])
+
+  eventDate    DateTime      @db.Date
+  startTime    String                       // "09.00"
+  endTime      String                       // dihitung backend
+  location     String
+  eventType    String                       // "Pernikahan", "Ulang tahun", ...
+  eventName    String?
+  guestCount   Int?
+  organization String?
+  notes        String?
+
+  customerName String
+  email        String
+  whatsapp     String
+
+  voucherCode  String?
+  voucher      Voucher?      @relation(fields: [voucherCode], references: [code])
+
+  subtotal     Int                          // paket + add-on
+  discount     Int           @default(0)
+  total        Int                          // dihitung backend, JANGAN percaya angka dari frontend
+  paymentDeadline DateTime                  // slot ditahan sampai waktu ini
+
+  addons       BookingAddon[]
+  payments     Payment[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([eventDate])
+  @@index([status])
+}
+
+model BookingAddon {
+  id        Int     @id @default(autoincrement())
+  bookingId String
+  addonId   Int
+  qty       Int     @default(1)
+  price     Int                             // harga satuan saat dipesan (snapshot)
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  addon     Addon   @relation(fields: [addonId], references: [id])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  bookingId   String
+  method      PaymentMethod
+  amount      Int
+  status      PaymentStatus @default(PENDING)
+  providerRef String?                       // ID dari payment gateway (jika ada)
+  expiresAt   DateTime
+  paidAt      DateTime?
+  booking     Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+}
+
+// Override manual oleh admin (hari libur, penuh, event offline).
+// Status "DIBOOKING" idealnya dihitung dari tabel Booking.
+model Availability {
+  date   DateTime   @id @db.Date
+  status DateStatus
+  note   String?
+}
+
+// ───────────── CHATBOT, INQUIRY, KEMITRAAN ─────────────
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  createdAt DateTime      @default(now())
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id         Int         @id @default(autoincrement())
+  sessionId  String
+  role       String                         // "user" | "bot"
+  content    String
+  intent     Intent?                        // hasil classifier (khusus pesan user)
+  confidence Float?
+  latencyMs  Int?
+  createdAt  DateTime    @default(now())
+  session    ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+// Dataset untuk tim Data Science: pertanyaan + label intent.
+// Data historis WA diisi lewat unggah CSV (anonimkan nama/nomor).
+model Inquiry {
+  id        Int           @id @default(autoincrement())
+  source    InquirySource
+  message   String
+  intent    Intent?
+  isDummy   Boolean       @default(false)     // WAJIB true untuk data dummy
+  createdAt DateTime      @default(now())
+
+  @@index([intent])
+}
+
+model PartnershipLead {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String
+  whatsapp  String
+  city      String?
+  message   String?
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ───────────── ADMIN & ANALITIK ─────────────
+
+model AdminUser {
+  id           Int       @id @default(autoincrement())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         AdminRole @default(ADMIN)
+  createdAt    DateTime  @default(now())
+}
+
+// Traffic website untuk dashboard "performa website".
+model SiteVisit {
+  id        Int      @id @default(autoincrement())
+  path      String
+  referrer  String?                          // linktree / instagram / google / ...
+  device    String?                          // mobile | desktop
+  sessionId String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

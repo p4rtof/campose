@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --color-brand: #1a76d2;
+  --color-royal: #1f4fbf;
+  --color-ink: #241a24;
+  --color-pink: #ff5fbf;
+  --color-purple: #c26ae8;
+  --color-coral: #ff5a5a;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Poppins', sans-serif; color: #241a24; background: #fff; overflow-x: clip; max-width: 100%; }
+  html { overflow-x: hidden; }
+  img, svg { max-width: 100%; }
+  button { cursor: pointer; }
+  h1, h2, h3 { letter-spacing: 0.02em; }
+}
+
+@layer components {
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; height: 48px; padding: 0 1.5rem; border-radius: 999px; font-weight: 600; font-size: 15px; transition: all .2s; white-space: nowrap; }
+  .btn-auto { width: auto !important; }
+  @media (max-width: 767px) { .btn { width: 100%; min-height: 48px; } .card { border-radius: 16px; } }
+  .btn-primary { background: #1a76d2; color: #fff; box-shadow: 0 8px 20px -8px rgba(26,118,210,.7); }
+  .btn-primary:hover { background: #1f4fbf; transform: translateY(-1px); }
+  .btn-primary:disabled { background: #b7cfe9; box-shadow: none; cursor: not-allowed; transform: none; }
+  .btn-outline { border: 2px solid #1a76d2; color: #1a76d2; background: transparent; }
+  .btn-outline:hover { background: #1a76d2; color: #fff; }
+  .btn-white { background: #fff; color: #1a76d2; }
+  .btn-white:hover { background: #eaf3fc; }
+  .btn-ghost-white { border: 2px solid rgba(255,255,255,.85); color: #fff; }
+  .btn-ghost-white:hover { background: rgba(255,255,255,.15); }
+  .chip { height: 44px; padding: 0 1.25rem; border-radius: 999px; border: 1.5px solid #d6e4f5; background: #fff; font-weight: 500; font-size: 14px; transition: all .15s; }
+  .chip:hover:not(:disabled) { border-color: #1a76d2; color: #1a76d2; }
+  .chip[data-on='true'] { background: #1a76d2; border-color: #1a76d2; color: #fff; }
+  .chip:disabled { background: #f3f4f6; color: #b6b9c0; text-decoration: line-through; cursor: not-allowed; }
+  .field { width: 100%; height: 52px; border-radius: 14px; border: 1.5px solid #d6e4f5; background: #fff; padding: 0 1rem; font-size: 15px; outline: none; transition: border .15s, box-shadow .15s; }
+  textarea.field { height: auto; padding: .85rem 1rem; resize: none; }
+  .field:focus { border-color: #1a76d2; box-shadow: 0 0 0 4px rgba(26,118,210,.15); }
+  .card { background: #fff; border-radius: 24px; border: 1px solid #e3edf9; box-shadow: 0 18px 40px -24px rgba(26,118,210,.35); }
+  .eyebrow { font-weight: 700; text-transform: uppercase; letter-spacing: .18em; font-size: 13px; color: #1a76d2; }
+  .silk-light { background: radial-gradient(1200px 500px at 85% -10%, #dcebfb 0%, transparent 60%), radial-gradient(900px 500px at 0% 100%, #eef5fd 0%, transparent 60%), #fff; }
+  .ticket { -webkit-mask: radial-gradient(circle 14px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 14px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat; mask: radial-gradient(circle 14px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 14px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat; }
+}
+
+@keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+.pop { animation: pop .25s ease-out both; }
