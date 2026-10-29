@@ -25,13 +25,16 @@ enum PaymentMethod {
   VA_BNI
   VA_BRI
   VA_MANDIRI
+  TRANSFER_MANUAL
 }
 
 enum PaymentStatus {
   PENDING
+  MENUNGGU_KONFIRMASI  // customer sudah upload bukti, menunggu admin
   PAID
   EXPIRED
   FAILED
+  DITOLAK              // admin menolak bukti bayar
 }
 
 enum DateStatus {
@@ -154,16 +157,19 @@ model BookingAddon {
 }
 
 model Payment {
-  id          String        @id @default(cuid())
-  bookingId   String
-  method      PaymentMethod
-  amount      Int
-  status      PaymentStatus @default(PENDING)
-  providerRef String?                       // ID dari payment gateway (jika ada)
-  expiresAt   DateTime
-  paidAt      DateTime?
-  booking     Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  createdAt   DateTime      @default(now())
+  id             String        @id @default(cuid())
+  bookingId      String
+  method         PaymentMethod
+  amount         Int
+  status         PaymentStatus @default(PENDING)
+  providerRef    String?                       // ID dari payment gateway (jika ada)
+  paymentProofUrl String?                      // URL bukti pembayaran yang diupload customer
+  uploadedAt     DateTime?                     // Waktu upload bukti bayar
+  adminNote      String?                       // Catatan dari admin saat konfirmasi/tolak
+  expiresAt      DateTime
+  paidAt         DateTime?
+  booking        Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
 }
 
 // Override manual oleh admin (hari libur, penuh, event offline).

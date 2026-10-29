@@ -10,8 +10,10 @@ export type Booking = {
   acara: string; tamu: string; instansi: string; addons: number[]; agree: boolean
 }
 
-// Ambil bulan saat ini secara otomatis (1-12)
-const currentMonth = new Date().getMonth() + 1
+// Ambil bulan & hari saat ini secara otomatis
+const now = new Date()
+const currentMonth = now.getMonth() + 1
+const currentDay = now.getDate()
 
 export const emptyBooking: Booking = { 
   pkg: 1, 
@@ -36,8 +38,8 @@ export const emptyBooking: Booking = {
 
 export const demoBooking: Partial<Booking> = { 
   month: currentMonth, 
-  day: 18, 
-  time: '10.00', 
+  day: currentDay, 
+  time: '14.00', 
   lokasi: 'Gedung Serbaguna Kemang, Jakarta Selatan', 
   jenis: 'Wedding', 
   first: 'Nadia', 

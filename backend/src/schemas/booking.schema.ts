@@ -14,9 +14,9 @@ export const bookingBody = z.object({
   organization: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   customer: z.object({
-    name: z.string().min(2),
-    email: z.string().email(),
-    whatsapp: z.string().regex(/^\+?\d{9,15}$/, 'Nomor WhatsApp tidak valid'),
+    name: z.string().min(2, 'Nama minimal 2 karakter'),
+    email: z.string().email('Format email tidak valid'),
+    whatsapp: z.string().regex(/^(08|\+?62|0)\d{8,13}$|^\+?\d{9,15}$/, 'Nomor WhatsApp harus valid diawali 08 (contoh: 081234567890)'),
   }),
   addons: z.array(z.object({ addonId: z.number().int().positive(), qty: z.number().int().min(1).max(50) })).default([]),
   voucherCode: z.string().optional().nullable(),
@@ -26,7 +26,11 @@ export type BookingBody = z.infer<typeof bookingBody>
 export const quoteBody = bookingBody.pick({ packageId: true, addons: true, voucherCode: true })
 
 export const monthQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/, 'Format YYYY-MM') })
-export const slotsQuery = z.object({ date, packageId: z.coerce.number().int().positive() })
+export const slotsQuery = z.object({
+  date,
+  packageId: z.coerce.number().int().positive().optional(),
+  hours: z.coerce.number().int().positive().optional(),
+})
 export const paymentBody = z.object({ method: z.enum(['QRIS', 'VA_BCA', 'VA_BNI', 'VA_BRI', 'VA_MANDIRI']) })
 export const voucherBody = z.object({ code: z.string().min(1) })
 export const chatBody = z.object({ sessionId: z.string().optional(), message: z.string().min(1).max(500) })

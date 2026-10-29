@@ -9,7 +9,7 @@ import { col } from '@/lib/image'
 import { navigate, usePath } from '@/lib/router'
 
 export type Msg = { from: 'bot' | 'me'; text: string; act?: { label: string; kind: 'book' | 'wa' | 'photobox'; day?: number; month?: number } }
-export const STATUS_TXT: Record<DStatus, string> = { tersedia: 'Tersedia', penuh: 'Penuh', dibooking: 'Sudah dibooking' }
+export const STATUS_TXT: Record<DStatus, string> = { tersedia: 'Tersedia', penuh: 'Penuh', dibooking: 'Sudah dibooking', lewat: 'Sudah lewat' }
 export function Assistant() {
   const { set } = useBooking()
   const path = usePath()

@@ -142,7 +142,7 @@ export function InvoicePage() {
             </div>
 
             <div className="p-5 md:p-10 flex flex-col md:flex-row gap-3 md:gap-4">
-<button onClick={() => navigate(`/pembayaran?code=${invoiceCode}`)} className="btn btn-primary !h-14 md:flex-1 text-base">                Bayar Sekarang
+              <button onClick={() => navigate(`/pembayaran?code=${invoiceCode}`)} className="btn btn-primary !h-14 md:flex-1 text-base">                Bayar Sekarang
               </button>
               <button onClick={downloadPDF} disabled={isDownloading} className={`btn btn-outline !h-14 ${isDownloading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 <Icon n="download" s={18} /> {isDownloading ? 'Menyiapkan PDF...' : 'Download Invoice (PDF)'}
