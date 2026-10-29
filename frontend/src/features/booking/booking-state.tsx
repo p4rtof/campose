@@ -45,7 +45,7 @@ export const demoBooking: Partial<Booking> = {
   first: 'Nadia', 
   last: 'Putri', 
   email: 'nadia.putri@gmail.com', 
-  wa: '+62 812-3456-7890', 
+  wa: '081234567890', 
   acara: 'Pernikahan Nadia & Raka', 
   tamu: '250', 
   instansi: '' 

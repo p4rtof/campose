@@ -178,6 +178,7 @@ type S = {
   rejectPayment: (bookingIdOrInv: string, adminNote?: string) => Promise<boolean>
   rescheduleBooking: (inv: string, date: string, start: string, end: string) => Promise<boolean>
   cancelBooking: (inv: string, reason: string) => Promise<boolean>
+  completeBooking: (inv: string) => Promise<boolean>
   add: (b: any) => Promise<void>
   toast: (m: string, kind?: 'ok' | 'err') => void
   q: string
@@ -442,6 +443,25 @@ export function Provider({ children }: { children: ReactNode }) {
     return false
   }
 
+  const completeBooking = async (inv: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API}/bookings/${inv}/status`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'SELESAI' }),
+      })
+      if (res.ok) {
+        toast(`Booking ${inv} ditandai selesai.`, 'ok')
+        refreshBookings()
+        return true
+      }
+    } catch {}
+    return false
+  }
+
   // 9. Action: Add Manual Booking
   const add = async (b: any) => {
     try {
@@ -595,6 +615,7 @@ export function Provider({ children }: { children: ReactNode }) {
         rejectPayment,
         rescheduleBooking,
         cancelBooking,
+        completeBooking,
         add,
         toast,
         q,

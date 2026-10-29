@@ -44,7 +44,7 @@ export function BookingNew() {
             <Input required value={f.name} onChange={set('name')} placeholder="Contoh: Raka Aditya" />
           </Field>
           <Field label="Kontak WhatsApp">
-            <Input required value={f.wa} onChange={set('wa')} placeholder="+62 8xx-xxxx-xxxx" inputMode="tel" />
+            <Input required value={f.wa} onChange={set('wa')} placeholder="08..." inputMode="tel" />
           </Field>
           <Field label="Paket Photobooth">
             <Select value={f.pkg} onChange={set('pkg')}>
@@ -299,7 +299,7 @@ const Row = ({ l, v }: { l: string; v: React.ReactNode }) => (
 )
 
 export function Detail() {
-  const { route, get, bookings, confirmPayment, rejectPayment, rescheduleBooking, cancelBooking } = useApp()
+  const { route, get, bookings, confirmPayment, rejectPayment, rescheduleBooking, cancelBooking, completeBooking } = useApp()
   const b: Booking = get(route.id)
   const [dlg, setDlg] = useState<null | 'konfirmasi' | 'jadwal' | 'batal' | 'selesai' | 'reject' | 'previewProof'>(null)
   const [reason, setReason] = useState('')
@@ -607,16 +607,16 @@ export function Detail() {
         footer={
           <>
             <Btn full onClick={close}>Kembali</Btn>
-            <Btn
-              v="primary"
-              full
-              onClick={async () => {
-                await cancelBooking(b.inv, 'Event ditandai selesai')
-                close()
-              }}
-            >
-              Ya, Tandai Selesai
-            </Btn>
+             <Btn
+               v="primary"
+               full
+               onClick={async () => {
+                 await completeBooking(b.inv)
+                 close()
+               }}
+             >
+               Ya, Tandai Selesai
+             </Btn>
           </>
         }
       >

@@ -99,6 +99,7 @@ export async function checkBookingPaymentStatus(code: string) {
         orderBy: { createdAt: 'desc' },
         take: 1,
       },
+      package: true,
     },
   })
   if (!b) throw new AppError(404, 'NOT_FOUND', 'Booking tidak ditemukan')
@@ -109,5 +110,19 @@ export async function checkBookingPaymentStatus(code: string) {
     paymentId: payment?.id ?? null,
     proofUrl: payment?.paymentProofUrl ?? null,
     adminNote: payment?.adminNote ?? null,
+    booking: {
+      code: b.code,
+      customerName: b.customerName,
+      email: b.email,
+      whatsapp: b.whatsapp,
+      eventDate: b.eventDate,
+      startTime: b.startTime,
+      endTime: b.endTime,
+      location: b.location,
+      eventName: b.eventName,
+      eventType: b.eventType,
+      total: b.total,
+      package: b.package,
+    },
   }
 }

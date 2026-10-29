@@ -59,6 +59,10 @@ export function DetailPage() {
   const [slide, setSlide] = useState(0)
   const [sheet, setSheet] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [voucherInput, setVoucherInput] = useState('')
+  const [voucherMsg, setVoucherMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [applyingVoucher, setApplyingVoucher] = useState(false)
 
   // 1. Tanggal & Waktu Realtime
   const today = new Date()
@@ -79,6 +83,30 @@ export function DetailPage() {
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [dbPackages, setDbPackages] = useState<any[]>([])
   const [dbAddons, setDbAddons] = useState<any[]>([])
+
+  const applyVoucher = async () => {
+    if (!voucherInput.trim()) {
+      setVoucherMsg({ type: 'error', text: 'Masukkan kode voucher' })
+      return
+    }
+    setApplyingVoucher(true)
+    setVoucherMsg(null)
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/vouchers/${voucherInput.toUpperCase()}`)
+      const data = await res.json()
+      if (res.ok && data.data) {
+        set({ voucher: voucherInput.toUpperCase() })
+        setVoucherMsg({ type: 'success', text: `Voucher berhasil diterapkan! Diskon: Rp${data.data.discount?.toLocaleString('id-ID')}` })
+        setVoucherInput('')
+      } else {
+        setVoucherMsg({ type: 'error', text: data.error?.message || 'Kode voucher tidak valid atau sudah expired' })
+      }
+    } catch {
+      setVoucherMsg({ type: 'error', text: 'Gagal memvalidasi voucher' })
+    } finally {
+      setApplyingVoucher(false)
+    }
+  }
 
   // Ambil paket & add-on dari database backend
   useEffect(() => {
@@ -212,13 +240,35 @@ export function DetailPage() {
     return { available: true }
   }
 
-  const ready = b.day && b.time && b.lokasi && b.acara && b.first && b.email && b.wa
-  const toggle = (i: number) => set({ addons: b.addons.includes(i) ? b.addons.filter((x) => x !== i) : [...b.addons, i] })
-  const missing = [!b.day && 'tanggal', !b.time && 'jam', !(b.acara && b.lokasi) && 'detail event', !(b.first && b.email && b.wa) && 'identitas', !b.agree && 'persetujuan S&K'].filter(Boolean).join(', ')
+   const ready = b.day && b.time && b.lokasi && b.acara && b.first && b.email && b.wa
+   const toggle = (i: number) => set({ addons: b.addons.includes(i) ? b.addons.filter((x) => x !== i) : [...b.addons, i] })
+   const missing = [!b.day && 'tanggal', !b.time && 'jam', !(b.acara && b.lokasi) && 'detail event', !(b.first && b.email && b.wa) && 'identitas', !b.agree && 'persetujuan S&K'].filter(Boolean).join(', ')
+ 
+   const validate = () => {
+     const e: Record<string, string> = {}
+     if (!b.day) e.day = 'Pilih tanggal acara'
+     if (!b.time) e.time = 'Pilih jam layanan'
+     if (!b.acara) e.acara = 'Nama acara wajib diisi'
+     if (!b.lokasi) e.lokasi = 'Lokasi acara wajib diisi'
+     if (!b.first) e.first = 'Nama depan wajib diisi'
+     if (!b.email) {
+       e.email = 'Email wajib diisi'
+     } else if (!/\S+@\S+\.\S+/.test(b.email)) {
+       e.email = 'Format email tidak valid'
+     }
+     if (!b.wa) {
+       e.wa = 'Nomor WhatsApp wajib diisi'
+     } else if (!/^(08|628|\+628)\d{8,13}$/.test(b.wa.replace(/[\s-]/g, ''))) {
+       e.wa = 'Format nomor tidak valid (gunakan 08...)'
+     }
+     if (!b.agree) e.agree = 'Anda harus menyetujui S&K'
+     setErrors(e)
+     return Object.keys(e).length === 0
+   }
 
-  const handleBookingSubmit = async () => {
-    if (!ready || !b.agree || loading) return
-    setLoading(true)
+   const handleBookingSubmit = async () => {
+     if (!validate() || loading) return
+     setLoading(true)
 
     const cleanWa = b.wa.replace(/[\s-]/g, '')
     const cleanTime = b.time ? (b.time.length === 4 ? `0${b.time}` : b.time) : ''
@@ -406,10 +456,12 @@ export function DetailPage() {
                 <div className="mt-3 rounded-xl bg-white border border-[#d6e4f5] p-4 text-sm">
                   <div className="flex items-center gap-2 text-ink/60"><Icon n="cal" s={16} /> Tanggal terpilih<Req /></div>
                   <div className="font-semibold mt-0.5">{b.day ? dateLabel(b.month, b.day) : 'Belum dipilih'}</div>
+                  {errors.day && <p className="mt-1 text-xs text-red-600">{errors.day}</p>}
                   <div className="flex items-center gap-2 text-ink/60 mt-3"><Icon n="clock" s={16} /> Jam terpilih<Req /></div>
                   <div className="font-semibold mt-0.5 text-brand">
                     {b.time ? `${b.time} – ${endTime(b.time, p?.hours || 2)} WIB (${p?.hours || 2} jam)` : 'Belum dipilih'}
                   </div>
+                  {errors.time && <p className="mt-1 text-xs text-red-600">{errors.time}</p>}
                 </div>
 
                 {b.day ? (
@@ -461,6 +513,7 @@ export function DetailPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <L t="Nama Acara" req>
                 <input className="field" placeholder="cth: Pernikahan Nadia & Raka" value={b.acara} onChange={(e) => set({ acara: e.target.value })} />
+                {errors.acara && <p className="mt-1 text-xs text-red-600">{errors.acara}</p>}
               </L>
               <L t="Jenis Acara">
                 <select className="field" value={b.jenis} onChange={(e) => set({ jenis: e.target.value })}>
@@ -471,6 +524,7 @@ export function DetailPage() {
               <div className="md:col-span-2">
                 <L t="Lokasi / Alamat Event" req>
                   <input className="field" placeholder="Nama venue, alamat lengkap, kota" value={b.lokasi} onChange={(e) => set({ lokasi: e.target.value })} />
+                  {errors.lokasi && <p className="mt-1 text-xs text-red-600">{errors.lokasi}</p>}
                 </L>
               </div>
               <L t="Perkiraan Jumlah Tamu">
@@ -485,10 +539,19 @@ export function DetailPage() {
           {/* Section Identitas Pemesan */}
           <Section n={3} t="Identitas Pemesan">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <L t="Nama Depan" req><input className="field" value={b.first} onChange={(e) => set({ first: e.target.value })} /></L>
+              <L t="Nama Depan" req>
+                <input className="field" value={b.first} onChange={(e) => set({ first: e.target.value })} />
+                {errors.first && <p className="mt-1 text-xs text-red-600">{errors.first}</p>}
+              </L>
               <L t="Nama Belakang"><input className="field" value={b.last} onChange={(e) => set({ last: e.target.value })} /></L>
-              <L t="Email" req><input type="email" className="field" value={b.email} onChange={(e) => set({ email: e.target.value })} /></L>
-              <L t="Nomor WhatsApp" req><input className="field" placeholder="+62" value={b.wa} onChange={(e) => set({ wa: e.target.value })} /></L>
+              <L t="Email" req>
+                <input type="email" className="field" value={b.email} onChange={(e) => set({ email: e.target.value })} />
+                {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
+              </L>
+              <L t="Nomor WhatsApp" req>
+                <input className="field" placeholder="08..." value={b.wa} onChange={(e) => set({ wa: e.target.value })} />
+                {errors.wa && <p className="mt-1 text-xs text-red-600">{errors.wa}</p>}
+              </L>
               <div className="md:col-span-2"><L t="Nama Instansi / Organisasi (opsional)"><input className="field" value={b.instansi} onChange={(e) => set({ instansi: e.target.value })} /></L></div>
             </div>
           </Section>
@@ -519,6 +582,38 @@ export function DetailPage() {
               })}
             </div>
 
+            <div className="mt-6 p-5 rounded-2xl border-2 border-[#d6e4f5] bg-white">
+              <label className="block text-sm font-medium mb-3">Punya Kode Voucher?</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={voucherInput}
+                  onChange={(e) => setVoucherInput(e.target.value.toUpperCase())}
+                  placeholder="Masukkan kode voucher"
+                  className="flex-1 px-4 py-2 border border-[#d6e4f5] rounded-xl focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  disabled={applyingVoucher}
+                  onKeyDown={(e) => e.key === 'Enter' && applyVoucher()}
+                />
+                <button
+                  onClick={applyVoucher}
+                  disabled={applyingVoucher || !voucherInput.trim()}
+                  className="px-6 py-2 bg-brand text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {applyingVoucher ? 'Cek...' : 'Terapkan'}
+                </button>
+              </div>
+              {voucherMsg && (
+                <p className={`mt-2 text-sm font-medium ${voucherMsg.type === 'success' ? 'text-[#16a34a]' : 'text-red-600'}`}>
+                  {voucherMsg.text}
+                </p>
+              )}
+              {b.voucher && (
+                <p className="mt-2 text-sm text-[#16a34a] font-semibold">
+                  ✓ Voucher aktif: <b>{b.voucher}</b>
+                </p>
+              )}
+            </div>
+
             <div className="hidden md:block mt-8 rounded-2xl bg-[#F3F6FB] p-7">
               <h3 className="eyebrow mb-4">Ringkasan Pesanan</h3>
               <div className="flex justify-between py-2 text-sm"><span className="text-ink/60">Harga Paket Photobooth {p?.title}</span><b>{fmt(p?.price || 0)}</b></div>
@@ -540,10 +635,11 @@ export function DetailPage() {
               <span className={`w-6 h-6 rounded-md grid place-items-center border-2 shrink-0 ${b.agree ? 'bg-brand border-brand text-white' : 'border-[#b8cbe3] bg-white'}`}>{b.agree && <Icon n="check" s={14} />}</span>
               Saya menyetujui syarat dan ketentuan yang berlaku
             </label>
-            <button disabled={!ready || !b.agree || loading} onClick={handleBookingSubmit} className="hidden md:flex btn btn-primary w-full mt-6 !h-16 text-lg justify-center items-center cursor-pointer">
+            {errors.agree && <p className="mt-2 text-sm text-red-600 font-bold">{errors.agree}</p>}
+            <button disabled={loading || !b.agree} onClick={handleBookingSubmit} className="hidden md:flex btn btn-primary w-full mt-6 !h-16 text-lg justify-center items-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
               {loading ? 'Memproses...' : 'Booking Sekarang'}
             </button>
-            {(!ready || !b.agree) && <p className="hidden md:block mt-3 text-xs text-ink/55 text-center">Lengkapi: {missing}.</p>}
+            {Object.keys(errors).length > 0 && <p className="hidden md:block mt-3 text-xs text-red-600 text-center font-semibold">Mohon perbaiki kesalahan di atas sebelum melanjutkan.</p>}
           </Section>
         </div>
       </div>
@@ -554,7 +650,7 @@ export function DetailPage() {
           <span><span className="block text-xs text-ink/55">Total Harga · lihat rincian</span><span className="text-xl font-extrabold text-royal">{fmt(r.total)}</span></span>
           <span className="w-9 h-9 rounded-full bg-[#e6f2ff] text-brand grid place-items-center"><Icon n="down" s={18} className="rotate-180" /></span>
         </button>
-        <button onClick={() => (ready && b.agree ? handleBookingSubmit() : setSheet(true))} disabled={loading} className={`btn btn-primary mt-2 !h-12 w-full ${ready && b.agree ? '' : 'opacity-70'}`}>
+        <button onClick={() => (Object.keys(errors).length === 0 && ready && b.agree ? handleBookingSubmit() : setSheet(true))} disabled={loading || !b.agree || Object.keys(errors).length > 0 || !ready} className={`btn btn-primary mt-2 !h-12 w-full ${Object.keys(errors).length === 0 && ready && b.agree ? '' : 'opacity-70 cursor-not-allowed'}`}>
           {loading ? 'Memproses...' : 'Booking Sekarang'}
         </button>
       </div>
@@ -573,8 +669,9 @@ export function DetailPage() {
             <div className="flex justify-between text-sm py-1"><span className="text-ink/60">Total Add On ({b.addons.length})</span><b>{fmt(r.addonTotal)}</b></div>
             {r.discount > 0 && <div className="flex justify-between text-sm py-1 text-[#16a34a] font-semibold"><span>Diskon Voucher ({r.voucher})</span><b>-{fmt(r.discount)}</b></div>}
             <div className="mt-4 pt-4 border-t-2 border-dashed border-[#d6e4f5] flex justify-between items-end"><span className="font-extrabold uppercase text-sm tracking-wider">Total Harga</span><span className="text-3xl font-extrabold text-royal">{fmt(r.total)}</span></div>
-            {(!ready || !b.agree) && <p className="mt-4 text-xs text-coral font-medium">Lengkapi dulu: {missing}.</p>}
-            <button disabled={!ready || !b.agree || loading} onClick={handleBookingSubmit} className="btn btn-primary mt-4 !h-12 w-full">
+            {Object.keys(errors).length > 0 && <p className="mt-4 text-sm text-red-600 font-bold">Mohon perbaiki kesalahan di atas.</p>}
+            {(!ready || !b.agree) && Object.keys(errors).length === 0 && <p className="mt-4 text-xs text-coral font-medium">Lengkapi dulu: {missing}.</p>}
+            <button disabled={loading || !b.agree || Object.keys(errors).length > 0 || !ready} onClick={handleBookingSubmit} className="btn btn-primary mt-4 !h-12 w-full disabled:opacity-50 disabled:cursor-not-allowed">
               {loading ? 'Memproses...' : 'Booking Sekarang'}
             </button>
           </div>

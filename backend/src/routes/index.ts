@@ -53,6 +53,10 @@ routes.post('/vouchers/validate', validate(S.voucherBody), wrap(async (req, res)
   const v = await checkVoucher(req.body.code)
   res.json(ok({ code: v.code, discountAmount: v.discountAmount }))
 }))
+routes.get('/vouchers/:code', wrap(async (req, res) => {
+  const v = await checkVoucher(req.params.code)
+  res.json(ok({ code: v.code, discount: v.discountAmount }))
+}))
 routes.post('/bookings/quote', validate(S.quoteBody), wrap(async (req, res) => {
   const q = await quote(req.body)
   res.json(ok({ package: q.pkg.name, items: q.items, subtotal: q.subtotal, discount: q.discount, total: q.total }))

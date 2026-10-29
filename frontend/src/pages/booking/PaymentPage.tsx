@@ -3,8 +3,8 @@ import { Aperture } from '@/components/Brand'
 import { Icon } from '@/components/Icon'
 import { WA } from '@/data/config'
 import { FlowSteps } from '@/features/booking/FlowSteps'
-import { resolved, useBooking, useCountdown } from '@/features/booking/booking-state'
-import { fmt } from '@/lib/format'
+import { useCountdown } from '@/features/booking/booking-state'
+import { fmt, dateLabel, endTime } from '@/lib/format'
 import { Link } from '@/lib/router'
 
 const BANKS = [
@@ -16,8 +16,6 @@ const BANKS = [
 type PaymentStatus = 'PENDING' | 'MENUNGGU_KONFIRMASI' | 'PAID' | 'DITOLAK' | null
 
 export function PaymentPage() {
-  const { b } = useBooking()
-  const r = resolved(b)
   const cd = useCountdown(23 * 3600 + 59 * 60)
   const [toast, setToast] = useState('')
   const [tab, setTab] = useState<'qris' | 'transfer'>('transfer')
@@ -28,26 +26,29 @@ export function PaymentPage() {
   const [preview, setPreview] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [booking, setBooking] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   const queryParams = new URLSearchParams(window.location.search)
   const invoiceCode = queryParams.get('code') || 'CMP-0001'
   const BASE_URL = 'http://localhost:4000'
 
-  // Inisialisasi payment saat halaman dibuka
   useEffect(() => {
     const init = async () => {
       try {
-        // Cek status dulu
         const statusRes = await fetch(`${BASE_URL}/api/v1/bookings/${invoiceCode}/payment-status`)
         const statusData = await statusRes.json()
         if (statusRes.ok && statusData.data) {
           setPaymentStatus(statusData.data.paymentStatus)
           setPaymentId(statusData.data.paymentId)
           setAdminNote(statusData.data.adminNote)
-          if (statusData.data.paymentStatus) return // sudah ada payment
+          setBooking(statusData.data.booking)
+          if (statusData.data.paymentStatus) {
+            setLoading(false)
+            return
+          }
         }
 
-        // Buat payment baru
         const res = await fetch(`${BASE_URL}/api/v1/bookings/${invoiceCode}/payments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -60,12 +61,13 @@ export function PaymentPage() {
         }
       } catch (e) {
         console.error('Init payment error:', e)
+      } finally {
+        setLoading(false)
       }
     }
     init()
   }, [invoiceCode])
 
-  // Polling status pembayaran setiap 5 detik
   useEffect(() => {
     const poll = async () => {
       try {
@@ -74,12 +76,24 @@ export function PaymentPage() {
         if (res.ok && data.data) {
           setPaymentStatus(data.data.paymentStatus)
           setAdminNote(data.data.adminNote)
+          setBooking(data.data.booking)
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { }
     }
     const interval = setInterval(poll, 5000)
     return () => clearInterval(interval)
   }, [invoiceCode])
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (paymentStatus === 'MENUNGGU_KONFIRMASI') {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [paymentStatus])
 
   useEffect(() => {
     if (toast) {
@@ -126,6 +140,28 @@ export function PaymentPage() {
     }
   }
 
+  if (loading) return (
+    <div className="min-h-screen grid place-items-center bg-white">
+      <div className="text-center">
+        <Icon n="clock" s={40} className="animate-spin text-brand mx-auto" />
+        <p className="mt-4 text-ink/60 font-medium">Memuat data pembayaran...</p>
+      </div>
+    </div>
+  )
+
+  if (!booking) return (
+    <div className="min-h-screen grid place-items-center bg-white">
+      <div className="text-center max-w-md px-6">
+        <h1 className="text-2xl font-bold text-ink">Booking Tidak Ditemukan</h1>
+        <p className="mt-2 text-ink/60">Maaf, data pesanan dengan kode #{invoiceCode} tidak ditemukan di sistem kami.</p>
+        <Link to="/" className="btn btn-primary mt-6">Kembali ke Beranda</Link>
+      </div>
+    </div>
+  )
+
+  const dateStr = dateLabel(new Date(booking.eventDate).getMonth() + 1, new Date(booking.eventDate).getDate())
+  const rangeStr = `${booking.startTime} – ${booking.endTime} WIB`
+
   // Status: PAID = sukses
   if (paymentStatus === 'PAID') {
     return (
@@ -140,19 +176,23 @@ export function PaymentPage() {
               Pembayaran <span className="text-royal">Dikonfirmasi</span>
             </h1>
             <p className="mt-3 text-ink/70">
-              Terima kasih, {r.nama.split(' ')[0]}! Booking kamu sudah dikonfirmasi oleh admin. Detail dikirim ke {r.email}.
+              Terima kasih, {booking.customerName.split(' ')[0]}! Booking kamu sudah dikonfirmasi oleh admin. Detail dikirim ke {booking.email}.
             </p>
             <div className="mt-8 ticket bg-[#f6faff] rounded-2xl p-5 md:p-6 text-left grid grid-cols-1 md:grid-cols-2 gap-y-1 md:gap-y-3 text-sm break-words">
+              <span className="text-ink/55">Nama Customer</span>
+              <b className="md:text-right mb-2 md:mb-0">{booking.customerName}</b>
+              <span className="text-ink/55">Email</span>
+              <b className="md:text-right mb-2 md:mb-0">{booking.email}</b>
               <span className="text-ink/55">Invoice</span>
               <b className="md:text-right mb-2 md:mb-0">#{invoiceCode} · LUNAS</b>
               <span className="text-ink/55">Paket</span>
-              <b className="md:text-right mb-2 md:mb-0">Photobooth {r.pkg.title}</b>
+              <b className="md:text-right mb-2 md:mb-0">Photobooth {booking.package.name}</b>
               <span className="text-ink/55">Jadwal</span>
-              <b className="md:text-right mb-2 md:mb-0">{r.date}, {r.range}</b>
+              <b className="md:text-right mb-2 md:mb-0">{dateStr}, {rangeStr}</b>
               <span className="text-ink/55">Lokasi</span>
-              <b className="md:text-right mb-2 md:mb-0">{r.lokasi}</b>
+              <b className="md:text-right mb-2 md:mb-0">{booking.location}</b>
               <span className="text-ink/55">Total dibayar</span>
-              <b className="md:text-right text-royal mb-2 md:mb-0">{fmt(r.total)}</b>
+              <b className="md:text-right text-royal mb-2 md:mb-0">{fmt(booking.total)}</b>
             </div>
             <div className="mt-8 flex flex-col md:flex-row gap-3 md:gap-4 justify-center">
               <a href={WA} target="_blank" rel="noreferrer" className="btn btn-primary !h-14">
@@ -168,7 +208,6 @@ export function PaymentPage() {
     )
   }
 
-  // Status: MENUNGGU_KONFIRMASI = sudah upload, tunggu admin
   if (paymentStatus === 'MENUNGGU_KONFIRMASI') {
     return (
       <section className="silk-light py-8 md:py-12 md:min-h-[900px]">
@@ -185,8 +224,10 @@ export function PaymentPage() {
               Bukti pembayaran kamu sudah kami terima dan sedang diverifikasi oleh tim kami.
               Biasanya proses ini membutuhkan waktu <b>1×24 jam</b>.
             </p>
-            <div className="mt-6 p-4 rounded-2xl bg-[#FFF4D6] text-[#9a6700] text-sm">
-              <b>Invoice:</b> #{invoiceCode} &nbsp;·&nbsp; <b>Total:</b> {fmt(r.total)}
+            <div className="mt-6 p-4 rounded-2xl bg-[#FFF4D6] text-[#9a6700] text-sm space-y-2">
+              <div><b>Customer:</b> {booking.customerName}</div>
+              <div><b>Email:</b> {booking.email}</div>
+              <div><b>Invoice:</b> #{invoiceCode} &nbsp;·&nbsp; <b>Total:</b> {fmt(booking.total)}</div>
             </div>
             <p className="mt-6 text-xs text-ink/50">Halaman ini akan otomatis ter-update saat admin mengkonfirmasi.</p>
             <div className="mt-4 flex items-center justify-center gap-2">
@@ -300,31 +341,31 @@ export function PaymentPage() {
             </div>
           </div>
 
-          {/* Sidebar kanan */}
-          <aside className="card p-5 md:p-7 md:sticky md:top-28">
-            <span className="inline-flex items-center gap-2 bg-[#FFF4D6] text-[#9a6700] text-sm font-semibold px-4 py-2 rounded-full">
-              <i className="w-2 h-2 rounded-full bg-[#f5a524] animate-pulse" />Menunggu Pembayaran
-            </span>
-            <dl className="mt-6 space-y-3 text-sm">
-              <div className="flex justify-between"><dt className="text-ink/55">Invoice</dt><dd className="font-semibold">#{invoiceCode}</dd></div>
-              <div className="flex justify-between"><dt className="text-ink/55">Paket</dt><dd className="font-semibold">Photobooth {r.pkg.title}</dd></div>
-              <div className="flex justify-between"><dt className="text-ink/55">Jadwal</dt><dd className="font-semibold text-right">{r.date}<br />{r.range}</dd></div>
-            </dl>
-            <div className="my-5 border-t-2 border-dashed border-[#d6e4f5]" />
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between"><dt className="text-ink/55">Harga Paket</dt><dd className="font-semibold">{fmt(r.pkg.price)}</dd></div>
-              <div className="flex justify-between"><dt className="text-ink/55">Total Add On</dt><dd className="font-semibold">{fmt(r.addonTotal)}</dd></div>
-              {r.discount > 0 && <div className="flex justify-between text-[#16a34a] font-semibold"><dt>Diskon Voucher</dt><dd>-{fmt(r.discount)}</dd></div>}
-            </dl>
-            <div className="mt-5 pt-4 border-t-2 border-dashed border-[#d6e4f5] flex justify-between items-end">
-              <span className="font-extrabold uppercase tracking-wider text-sm">Total Harga</span>
-              <span className="text-2xl font-extrabold text-royal">{fmt(r.total)}</span>
-            </div>
-            <div className="mt-6 p-4 rounded-xl bg-[#f6faff] text-xs text-ink/60 space-y-1">
-              <p>⏱ Batas waktu pembayaran:</p>
-              <p className="text-2xl font-extrabold text-ink tabular-nums">{cd.h}:{cd.m}:{cd.s}</p>
-            </div>
-          </aside>
+           {/* Sidebar kanan */}
+           <aside className="card p-5 md:p-7 md:sticky md:top-28">
+             <span className="inline-flex items-center gap-2 bg-[#FFF4D6] text-[#9a6700] text-sm font-semibold px-4 py-2 rounded-full">
+               <i className="w-2 h-2 rounded-full bg-[#f5a524] animate-pulse" />Menunggu Pembayaran
+             </span>
+             <dl className="mt-6 space-y-3 text-sm">
+               <div className="flex justify-between"><dt className="text-ink/55">Nama</dt><dd className="font-semibold text-right">{booking.customerName}</dd></div>
+               <div className="flex justify-between"><dt className="text-ink/55">Email</dt><dd className="font-semibold text-right break-all text-xs">{booking.email}</dd></div>
+               <div className="flex justify-between"><dt className="text-ink/55">Invoice</dt><dd className="font-semibold">#{invoiceCode}</dd></div>
+               <div className="flex justify-between"><dt className="text-ink/55">Paket</dt><dd className="font-semibold">Photobooth {booking.package.name}</dd></div>
+               <div className="flex justify-between"><dt className="text-ink/55">Jadwal</dt><dd className="font-semibold text-right text-xs">{dateStr}<br />{rangeStr}</dd></div>
+             </dl>
+             <div className="my-5 border-t-2 border-dashed border-[#d6e4f5]" />
+             <dl className="space-y-2 text-sm">
+               <div className="flex justify-between"><dt className="text-ink/55">Lokasi</dt><dd className="font-semibold text-right text-xs">{booking.location}</dd></div>
+             </dl>
+             <div className="mt-5 pt-4 border-t-2 border-dashed border-[#d6e4f5] flex justify-between items-end">
+               <span className="font-extrabold uppercase tracking-wider text-sm">Total Harga</span>
+               <span className="text-2xl font-extrabold text-royal">{fmt(booking.total)}</span>
+             </div>
+             <div className="mt-6 p-4 rounded-xl bg-[#f6faff] text-xs text-ink/60 space-y-1">
+               <p>⏱ Batas waktu pembayaran:</p>
+               <p className="text-2xl font-extrabold text-ink tabular-nums">{cd.h}:{cd.m}:{cd.s}</p>
+             </div>
+           </aside>
         </div>
       </div>
       {toast && <div className="pop fixed top-24 left-1/2 -translate-x-1/2 bg-brand text-white px-6 py-3 rounded-full text-sm shadow-xl z-50 text-center w-max max-w-[90vw]">{toast}</div>}
