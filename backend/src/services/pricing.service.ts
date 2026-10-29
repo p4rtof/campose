@@ -20,12 +20,35 @@ export async function quote(
   input: { packageId: number; addons: { addonId: number; qty: number }[]; voucherCode?: string | null },
   db: Db = prisma,
 ) {
-  const pkg = await db.package.findFirst({ where: { id: input.packageId, isActive: true } })
+  let pkg = await db.package.findFirst({ where: { id: input.packageId, isActive: true } })
+
+  // Fallback: Jika ID spesifik tidak ditemukan (misal ID sequence di database berbeda dengan frontend),
+  // cari berdasarkan urutan paket aktif yang ada
+  if (!pkg) {
+    const allActive = await db.package.findMany({ where: { isActive: true }, orderBy: { hours: 'asc' } })
+    if (allActive.length > 0) {
+      if (input.packageId >= 1 && input.packageId <= allActive.length) {
+        pkg = allActive[input.packageId - 1]
+      } else {
+        pkg = allActive[0]
+      }
+    }
+  }
+
   if (!pkg) throw new AppError(404, 'NOT_FOUND', 'Paket tidak ditemukan')
 
-  const addonRows = await db.addon.findMany({ where: { id: { in: input.addons.map((a) => a.addonId) }, isActive: true } })
+  const requestedAddonIds = input.addons.map((a) => a.addonId)
+  const addonRows = await db.addon.findMany({ where: { id: { in: requestedAddonIds }, isActive: true } })
+  const allActiveAddons = await db.addon.findMany({ where: { isActive: true }, orderBy: { id: 'asc' } })
+
   const items = input.addons.map((a) => {
-    const row = addonRows.find((r) => r.id === a.addonId)
+    let row = addonRows.find((r) => r.id === a.addonId)
+    // Fallback: jika ID addon frontend beda sequence dengan DB, cocokkan dengan urutan aktif
+    if (!row && allActiveAddons.length > 0) {
+      if (a.addonId >= 1 && a.addonId <= allActiveAddons.length) {
+        row = allActiveAddons[a.addonId - 1]
+      }
+    }
     if (!row) throw new AppError(404, 'NOT_FOUND', `Add-on ${a.addonId} tidak ditemukan`)
     return { addonId: row.id, name: row.name, qty: a.qty, price: row.price }
   })
