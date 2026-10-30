@@ -296,10 +296,26 @@ export function Provider({ children }: { children: ReactNode }) {
   // 4. Setup Realtime Socket.IO
   useEffect(() => {
     if (!token) return
-    const socket = socketIO(BASE_URL, { transports: ['websocket', 'polling'] })
+    const socket = socketIO(BASE_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
+    })
     socketRef.current = socket
 
-    socket.emit('admin:join', token)
+    socket.on('connect', () => {
+      socket.emit('admin:join', token)
+    })
+
+    socket.on('connect_error', (error) => {
+      console.warn('Socket connection error:', error)
+    })
+
+    socket.on('disconnect', () => {
+      console.log('Socket disconnected')
+    })
 
     // Customer baru membuat booking di website
     socket.on('booking:created', (data: any) => {

@@ -3,13 +3,14 @@ import { START_HOURS, dayRange, hourOf, toTime } from '../lib/time.js'
 
 type Busy = { start: number; end: number }
 
-// Slot terisi = semua booking aktif yang tidak dibatalkan
+// Slot terisi = booking yang sudah terkonfirmasi (sudah bayar)
+// MENUNGGU_PEMBAYARAN tidak mengunci slot, sehingga customer lain bisa booking jika pembayaran belum masuk
 export async function busyRanges(date: string, db: Pick<typeof prisma, 'booking'> = prisma): Promise<Busy[]> {
   const targetDate = dayRange(date)
   const rows = await db.booking.findMany({
     where: {
       eventDate: targetDate,
-      status: { not: 'DIBATALKAN' },
+      status: { in: ['TERKONFIRMASI', 'SELESAI'] },
     },
     include: { package: true },
   })
@@ -81,16 +82,16 @@ export async function monthStatus(month: string) {
   const first = new Date(Date.UTC(y, m - 1, 1))
   const last = new Date(Date.UTC(y, m - 1, days, 23, 59, 59))
 
-  const [bookings, overrides] = await Promise.all([
-    prisma.booking.findMany({
-      where: {
-        eventDate: { gte: first, lte: last },
-        status: { not: 'DIBATALKAN' },
-      },
-      include: { package: true },
-    }),
-    prisma.availability.findMany({ where: { date: { gte: first, lte: last } } }),
-  ])
+   const [bookings, overrides] = await Promise.all([
+     prisma.booking.findMany({
+       where: {
+         eventDate: { gte: first, lte: last },
+         status: { in: ['TERKONFIRMASI', 'SELESAI'] },
+       },
+       include: { package: true },
+     }),
+     prisma.availability.findMany({ where: { date: { gte: first, lte: last } } }),
+   ])
 
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`

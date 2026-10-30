@@ -52,11 +52,6 @@ enum Intent {
   LAINNYA
 }
 
-enum InquirySource {
-  WEB_CHAT
-  WHATSAPP   // data historis (dummy / hasil input manual)
-  FORM
-}
 
 enum AdminRole {
   OWNER
@@ -202,19 +197,6 @@ model ChatMessage {
   @@index([sessionId])
 }
 
-// Dataset untuk tim Data Science: pertanyaan + label intent.
-// Data historis WA diisi lewat unggah CSV (anonimkan nama/nomor).
-model Inquiry {
-  id        Int           @id @default(autoincrement())
-  source    InquirySource
-  message   String
-  intent    Intent?
-  isDummy   Boolean       @default(false)     // WAJIB true untuk data dummy
-  createdAt DateTime      @default(now())
-
-  @@index([intent])
-}
-
 model PartnershipLead {
   id        Int      @id @default(autoincrement())
   name      String
@@ -237,14 +219,10 @@ model AdminUser {
   createdAt    DateTime  @default(now())
 }
 
-// Traffic website untuk dashboard "performa website".
-model SiteVisit {
-  id        Int      @id @default(autoincrement())
-  path      String
-  referrer  String?                          // linktree / instagram / google / ...
-  device    String?                          // mobile | desktop
-  sessionId String?
-  createdAt DateTime @default(now())
-
-  @@index([createdAt])
+model Setting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
 }
+
+

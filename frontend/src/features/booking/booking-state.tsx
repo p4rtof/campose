@@ -59,7 +59,11 @@ export function resolved(b: Booking) {
   const d = b.day ?? demoBooking.day!
   const t = b.day && b.time ? b.time : demoBooking.time!
   const pkg = PACKAGES[b.pkg] || PACKAGES[1]
-  const addons = b.addons.map((i) => { const q = b.qty[i] ?? 1; return [ADDONS[i][0], ADDONS[i][1] * q, q] as [string, number, number] })
+  const addons = b.addons.map((i) => {
+    const q = b.qty[i] ?? 1
+    const found = ADDONS[i] || ADDONS.find((_, idx) => idx + 1 === i) || [`Add-on #${i}`, 0]
+    return [found[0], (found[1] || 0) * q, q] as [string, number, number]
+  })
   const addonTotal = addons.reduce((s, a) => s + a[1], 0)
   const discount = VOUCHERS[b.voucher] ?? 0
   return {

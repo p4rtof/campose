@@ -11,6 +11,9 @@ export async function createBooking(input: BookingBody) {
   const q = await quote(input)
   const start = hourOf(input.startTime)
 
+  // Log untuk debugging
+  console.log('Creating booking with addons:', q.items)
+
   return prisma.$transaction(
     async (tx) => {
       // Cek slot di dalam transaksi supaya tidak ada double booking.
@@ -25,31 +28,34 @@ export async function createBooking(input: BookingBody) {
       const count = await tx.booking.count({ where: { code: { startsWith: `CMP-${year}-` } } })
       const code = `CMP-${year}-${String(count + 1).padStart(4, '0')}`
 
-      return tx.booking.create({
-        data: {
-          code,
-          packageId: q.pkg.id,
-          eventDate: dayRange(input.eventDate),
-          startTime: input.startTime,
-          endTime: toTime(start + q.pkg.hours),
-          location: input.location,
-          eventType: input.eventType,
-          eventName: input.eventName ?? null,
-          guestCount: input.guestCount ?? null,
-          organization: input.organization ?? null,
-          notes: input.notes ?? null,
-          customerName: input.customer.name,
-          email: input.customer.email,
-          whatsapp: input.customer.whatsapp,
-          voucherCode: q.voucherCode,
-          subtotal: q.subtotal,
-          discount: q.discount,
-          total: q.total,
-          paymentDeadline: new Date(Date.now() + PAYMENT_WINDOW_HOURS * 3600_000),
-          addons: { create: q.items.map((i) => ({ addonId: i.addonId, qty: i.qty, price: i.price })) },
-        },
-        include: { package: true },
-      })
+       const booking = await tx.booking.create({
+         data: {
+           code,
+           packageId: q.pkg.id,
+           eventDate: dayRange(input.eventDate),
+           startTime: input.startTime,
+           endTime: toTime(start + q.pkg.hours),
+           location: input.location,
+           eventType: input.eventType,
+           eventName: input.eventName ?? null,
+           guestCount: input.guestCount ?? null,
+           organization: input.organization ?? null,
+           notes: input.notes ?? null,
+           customerName: input.customer.name,
+           email: input.customer.email,
+           whatsapp: input.customer.whatsapp,
+           voucherCode: q.voucherCode,
+           subtotal: q.subtotal,
+           discount: q.discount,
+           total: q.total,
+           paymentDeadline: new Date(Date.now() + PAYMENT_WINDOW_HOURS * 3600_000),
+           addons: { create: q.items.map((i) => ({ addonId: i.addonId, qty: i.qty, price: i.price })) },
+         },
+         include: { package: true, addons: { include: { addon: true } } },
+       })
+       
+       console.log('Created booking with addons:', booking.addons)
+       return booking
     },
     { isolationLevel: 'Serializable' },
   )

@@ -1,19 +1,88 @@
 import { useEffect, useRef, useState } from 'react'
 import { A } from './router'
-import { ADDONS, PKG, TABS, useApp, API } from './store'
+import { TABS, useApp, API } from './store'
 import { Btn, Card, Field, Input, Modal, PageHead, Select, cx } from './ui'
+
+type PackageItem = {
+  id: number
+  name: string
+  hours: number
+  price: number
+  isPopular: boolean
+  isActive: boolean
+}
+
+type AddonItem = {
+  id: number
+  name: string
+  price: number
+  unit: string | null
+  isActive: boolean
+}
 
 export default function Settings() {
   const { toast, route } = useApp()
   const tab = route.tab ?? 'paket'
   const token = typeof window !== 'undefined' ? (sessionStorage.getItem('campose-token') || localStorage.getItem('admin_token') || '') : ''
 
+  // Admin users state
   const [admins, setAdmins] = useState<{ id: number; name: string; email: string; role: string }[]>([])
   const [addAdm, setAddAdm] = useState(false)
   const [na, setNa] = useState({ n: '', e: '', p: '', r: 'ADMIN' })
-  const [loading, setLoading] = useState(false)
-  const ed = useRef<HTMLDivElement>(null)
 
+  // Packages state
+  const [packages, setPackages] = useState<PackageItem[]>([])
+  const [savingPackages, setSavingPackages] = useState(false)
+
+  // Addons state
+  const [addons, setAddons] = useState<AddonItem[]>([])
+  const [savingAddons, setSavingAddons] = useState(false)
+  const [newAddonModal, setNewAddonModal] = useState(false)
+  const [newAddon, setNewAddon] = useState({ name: '', price: 0, unit: '' })
+
+  // Terms state
+  const [terms, setTerms] = useState<string[]>([])
+  const [savingTerms, setSavingTerms] = useState(false)
+
+  const [loading, setLoading] = useState(false)
+
+  // Load packages
+  useEffect(() => {
+    if (tab === 'paket' && token) {
+      fetch(`${API}/packages`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.data && Array.isArray(data.data)) setPackages(data.data)
+        })
+        .catch(() => {})
+    }
+  }, [tab, token])
+
+  // Load addons
+  useEffect(() => {
+    if (tab === 'add-on' && token) {
+      fetch(`${API}/addons`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.data && Array.isArray(data.data)) setAddons(data.data)
+        })
+        .catch(() => {})
+    }
+  }, [tab, token])
+
+  // Load terms
+  useEffect(() => {
+    if (tab === 'syarat' && token) {
+      fetch(`${API}/terms`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.data && Array.isArray(data.data)) setTerms(data.data)
+        })
+        .catch(() => {})
+    }
+  }, [tab, token])
+
+  // Load admins
   useEffect(() => {
     if (tab === 'admin' && token) {
       fetch(`${API}/users`, { headers: { Authorization: `Bearer ${token}` } })
@@ -25,8 +94,109 @@ export default function Settings() {
     }
   }, [tab, token])
 
-  const save = () => toast('Pengaturan berhasil disimpan ke database', 'ok')
-  const cmd = (c: string) => { ed.current?.focus(); document.execCommand(c) }
+  // Save Packages to Backend
+  const handleSavePackages = async () => {
+    setSavingPackages(true)
+    try {
+      for (const p of packages) {
+        await fetch(`${API}/packages/${p.id}`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ price: p.price, name: p.name, isPopular: p.isPopular }),
+        })
+      }
+      toast('Harga paket berhasil disimpan ke database!', 'ok')
+    } catch {
+      toast('Gagal menyimpan harga paket', 'err')
+    } finally {
+      setSavingPackages(false)
+    }
+  }
+
+  // Save Addons to Backend
+  const handleSaveAddons = async () => {
+    setSavingAddons(true)
+    try {
+      for (const a of addons) {
+        await fetch(`${API}/addons/${a.id}`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ price: a.price, name: a.name, unit: a.unit, isActive: a.isActive }),
+        })
+      }
+      toast('Daftar add-on berhasil diperbarui ke database!', 'ok')
+    } catch {
+      toast('Gagal menyimpan add-on', 'err')
+    } finally {
+      setSavingAddons(false)
+    }
+  }
+
+  // Create Addon
+  const handleCreateAddon = async () => {
+    if (!newAddon.name.trim()) return
+    try {
+      const res = await fetch(`${API}/addons`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newAddon.name.trim(),
+          price: Number(newAddon.price) || 0,
+          unit: newAddon.unit.trim() || null,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.data) {
+        setAddons((prev) => [...prev, data.data])
+        setNewAddonModal(false)
+        setNewAddon({ name: '', price: 0, unit: '' })
+        toast('Add-on baru berhasil ditambahkan!', 'ok')
+      } else {
+        toast(data.error?.message || 'Gagal menambahkan add-on', 'err')
+      }
+    } catch {
+      toast('Terjadi kesalahan', 'err')
+    }
+  }
+
+  // Delete Addon
+  const handleDeleteAddon = async (id: number) => {
+    if (!confirm('Hapus add-on ini?')) return
+    try {
+      const res = await fetch(`${API}/addons/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        setAddons((prev) => prev.filter((a) => a.id !== id))
+        toast('Add-on berhasil dihapus', 'ok')
+      }
+    } catch {
+      toast('Gagal menghapus add-on', 'err')
+    }
+  }
+
+  // Save Terms to Backend
+  const handleSaveTerms = async () => {
+    setSavingTerms(true)
+    try {
+      const validTerms = terms.map((t) => t.trim()).filter(Boolean)
+      const res = await fetch(`${API}/terms`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ terms: validTerms }),
+      })
+      if (res.ok) {
+        toast('Syarat & Ketentuan berhasil disimpan ke database!', 'ok')
+      } else {
+        toast('Gagal menyimpan syarat & ketentuan', 'err')
+      }
+    } catch {
+      toast('Terjadi kesalahan koneksi', 'err')
+    } finally {
+      setSavingTerms(false)
+    }
+  }
 
   const handleCreateAdmin = async () => {
     if (!na.n || !na.e) return
@@ -80,76 +250,161 @@ export default function Settings() {
       <Card className="max-w-3xl p-5 md:p-7">
         {tab === 'paket' && (
           <div className="space-y-4">
-            <h2 className="font-semibold text-base">Harga Paket Photobooth</h2>
-            {([2, 4, 8] as const).map((n) => (
-              <div key={n} className="grid grid-cols-[1fr_1.5fr] items-center gap-3">
-                <span className="font-medium text-sm">Paket {n} Jam</span>
-                <Input defaultValue={PKG[n]} type="number" aria-label={`Harga paket ${n} jam`} />
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-base">Harga Paket Photobooth (Database)</h2>
+                <p className="text-xs text-slate-500">Perubahan harga langsung diterapkan ke halaman publik pemesan</p>
               </div>
-            ))}
-            <h2 className="pt-4 font-semibold text-base">Kontak WhatsApp Admin</h2>
-            <Field label="Nomor WhatsApp CS" hint="Ditampilkan pada invoice dan tombol chat WhatsApp customer.">
-              <Input defaultValue="+62 821-2477-8747" inputMode="tel" />
-            </Field>
-            <Btn v="primary" full onClick={save} className="mt-2">
-              Simpan Pengaturan
+            </div>
+            {packages.length === 0 ? (
+              <div className="p-4 text-center text-sm text-slate-400">Memuat paket dari database...</div>
+            ) : (
+              packages.map((pkg) => (
+                <div key={pkg.id} className="grid grid-cols-[1.5fr_2fr] items-center gap-3 p-3 rounded-xl bg-canvas">
+                  <div>
+                    <span className="font-bold text-sm block">{pkg.name} ({pkg.hours} Jam)</span>
+                    <span className="text-xs text-slate-400">ID: {pkg.id}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-500">Rp</span>
+                    <Input
+                      type="number"
+                      value={pkg.price}
+                      onChange={(e) => {
+                        const val = Number(e.target.value) || 0
+                        setPackages((prev) => prev.map((item) => (item.id === pkg.id ? { ...item, price: val } : item)))
+                      }}
+                      aria-label={`Harga ${pkg.name}`}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+            <Btn v="primary" full loading={savingPackages} onClick={handleSavePackages} className="mt-4">
+              Simpan Perubahan Harga Paket
             </Btn>
           </div>
         )}
 
         {tab === 'add-on' && (
-          <div className="space-y-3">
-            <h2 className="font-semibold text-base">Daftar Add-on Photobooth</h2>
-            {Object.entries(ADDONS).map(([k, v]) => (
-              <div key={k} className="grid grid-cols-[1.5fr_1fr] items-center gap-3">
-                <span className="text-sm font-medium">{k}</span>
-                <Input defaultValue={v} type="number" aria-label={`Harga ${k}`} />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-base">Daftar Add-on Photobooth (Database)</h2>
+                <p className="text-xs text-slate-500">Atur nama, harga, dan ketersediaan add-on yang muncul saat booking</p>
               </div>
-            ))}
-            <Btn icon="plus" full onClick={() => toast('Fitur tambah add-on baru')}>
-              Tambah Add-on
-            </Btn>
-            <Btn v="primary" full onClick={save} className="mt-2">
-              Simpan Add-on
+              <Btn icon="plus" onClick={() => setNewAddonModal(true)}>
+                Tambah Add-on
+              </Btn>
+            </div>
+
+            {addons.length === 0 ? (
+              <div className="p-4 text-center text-sm text-slate-400">Memuat add-on dari database...</div>
+            ) : (
+              <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+                {addons.map((addon) => (
+                  <div key={addon.id} className="flex items-center gap-3 p-3 rounded-xl bg-canvas">
+                    <input
+                      type="checkbox"
+                      checked={addon.isActive}
+                      onChange={(e) => {
+                        const checked = e.target.checked
+                        setAddons((prev) => prev.map((item) => (item.id === addon.id ? { ...item, isActive: checked } : item)))
+                      }}
+                      className="w-4 h-4 rounded text-brand cursor-pointer"
+                      title="Aktif / Nonaktif"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={addon.name}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setAddons((prev) => prev.map((item) => (item.id === addon.id ? { ...item, name: val } : item)))
+                        }}
+                        className="w-full text-sm font-semibold bg-transparent border-b border-transparent focus:border-brand focus:outline-none"
+                      />
+                      {addon.unit && <span className="text-xs text-slate-400">({addon.unit})</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5 w-36">
+                      <span className="text-xs text-slate-400">Rp</span>
+                      <Input
+                        type="number"
+                        value={addon.price}
+                        onChange={(e) => {
+                          const val = Number(e.target.value) || 0
+                          setAddons((prev) => prev.map((item) => (item.id === addon.id ? { ...item, price: val } : item)))
+                        }}
+                        className="!h-9 text-sm"
+                        aria-label={`Harga ${addon.name}`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteAddon(addon.id)}
+                      className="p-1.5 text-slate-400 hover:text-red-600 transition"
+                      title="Hapus Add-on"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Btn v="primary" full loading={savingAddons} onClick={handleSaveAddons} className="mt-2">
+              Simpan Perubahan Add-on
             </Btn>
           </div>
         )}
 
         {tab === 'syarat' && (
-          <div className="space-y-3">
-            <h2 className="font-semibold text-base">Syarat dan Ketentuan Layanan</h2>
-            <div className="flex gap-1">
-              {[
-                ['B', 'bold'],
-                ['I', 'italic'],
-                ['• Daftar', 'insertUnorderedList'],
-              ].map(([l, c]) => (
-                <button
-                  key={c}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    cmd(c)
-                  }}
-                  className="min-h-11 min-w-11 rounded-lg border border-slate-300 px-3 text-sm font-semibold hover:bg-slate-50 cursor-pointer"
-                >
-                  {l}
-                </button>
-              ))}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-base">Syarat dan Ketentuan Layanan (Database)</h2>
+                <p className="text-xs text-slate-500">Daftar aturan dan ketentuan yang wajib disetujui pemesan di formulir booking</p>
+              </div>
+              <Btn
+                icon="plus"
+                onClick={() => setTerms((prev) => [...prev, 'Ketentuan baru...'])}
+              >
+                Tambah Poin
+              </Btn>
             </div>
-            <div
-              ref={ed}
-              contentEditable
-              suppressContentEditableWarning
-              className="min-h-48 rounded-xl border border-slate-300 p-4 text-sm outline-none focus:border-brand focus:ring-4 focus:ring-brand/15 leading-relaxed"
-            >
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Pemesanan dianggap sah setelah bukti pembayaran DP diverifikasi oleh admin.</li>
-                <li>Reschedule maksimal 1x dan diajukan paling lambat H-3 sebelum acara.</li>
-                <li>Waktu layanan dihitung sejak photobooth siap digunakan di lokasi acara.</li>
-                <li>Keterlambatan akses venue akan mengurangi durasi layanan photobooth.</li>
-              </ul>
-            </div>
-            <Btn v="primary" full onClick={save} className="mt-2">
+
+            {terms.length === 0 ? (
+              <div className="p-4 text-center text-sm text-slate-400">Memuat syarat & ketentuan...</div>
+            ) : (
+              <div className="space-y-3">
+                {terms.map((term, idx) => (
+                  <div key={idx} className="flex items-start gap-2.5 p-3 rounded-xl bg-canvas">
+                    <span className="w-6 h-6 rounded-full bg-brand text-white text-xs font-bold grid place-items-center shrink-0 mt-1">
+                      {idx + 1}
+                    </span>
+                    <textarea
+                      rows={2}
+                      value={term}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setTerms((prev) => prev.map((item, i) => (i === idx ? val : item)))
+                      }}
+                      className="flex-1 text-sm bg-white p-2.5 rounded-lg border border-slate-200 focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none resize-none leading-relaxed"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTerms((prev) => prev.filter((_, i) => i !== idx))}
+                      className="p-2 text-slate-400 hover:text-red-600 transition shrink-0"
+                      title="Hapus poin ini"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Btn v="primary" full loading={savingTerms} onClick={handleSaveTerms} className="mt-2">
               Simpan Syarat & Ketentuan
             </Btn>
           </div>
@@ -196,6 +451,47 @@ export default function Settings() {
         )}
       </Card>
 
+      {/* Modal Addon Baru */}
+      <Modal
+        open={newAddonModal}
+        onClose={() => setNewAddonModal(false)}
+        title="Tambah Add-on Baru"
+        footer={
+          <>
+            <Btn full onClick={() => setNewAddonModal(false)}>Batal</Btn>
+            <Btn v="primary" full disabled={!newAddon.name.trim()} onClick={handleCreateAddon}>
+              Simpan Add-on
+            </Btn>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Nama Add-on">
+            <Input
+              value={newAddon.name}
+              onChange={(e) => setNewAddon({ ...newAddon, name: e.target.value })}
+              placeholder="Contoh: Lampu Sorot Tambahan"
+            />
+          </Field>
+          <Field label="Harga (Rupiah)">
+            <Input
+              type="number"
+              value={newAddon.price || ''}
+              onChange={(e) => setNewAddon({ ...newAddon, price: Number(e.target.value) || 0 })}
+              placeholder="25000"
+            />
+          </Field>
+          <Field label="Satuan / Keterangan (Opsional)">
+            <Input
+              value={newAddon.unit}
+              onChange={(e) => setNewAddon({ ...newAddon, unit: e.target.value })}
+              placeholder="Contoh: per orang / per sesi"
+            />
+          </Field>
+        </div>
+      </Modal>
+
+      {/* Modal Admin Baru */}
       <Modal
         open={addAdm}
         onClose={() => setAddAdm(false)}
@@ -235,3 +531,4 @@ export default function Settings() {
     </div>
   )
 }
+

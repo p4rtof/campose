@@ -230,7 +230,18 @@ adminRoutes.get('/packages', wrap(async (_req, res) => {
 }))
 adminRoutes.patch('/packages/:id', wrap(async (req, res) => {
   const id = Number(req.params.id)
-  const updated = await prisma.package.update({ where: { id }, data: req.body })
+  const data: any = {}
+  if (req.body.name !== undefined) data.name = req.body.name
+  if (req.body.price !== undefined) data.price = Number(req.body.price)
+  if (req.body.hours !== undefined) data.hours = Number(req.body.hours)
+  if (req.body.isPopular !== undefined) data.isPopular = Boolean(req.body.isPopular)
+  if (req.body.isActive !== undefined) data.isActive = Boolean(req.body.isActive)
+
+  const updated = await prisma.package.update({ where: { id }, data })
+  const io = (req as any).app.get('io')
+  if (io) {
+    io.emit('catalog:updated', { type: 'packages', id })
+  }
   res.json(ok(updated))
 }))
 
@@ -308,10 +319,83 @@ adminRoutes.get('/addons', wrap(async (_req, res) => {
   res.json(ok(await prisma.addon.findMany({ orderBy: { id: 'asc' } })))
 }))
 
+adminRoutes.post('/addons', wrap(async (req, res) => {
+  const { name, price, unit, isActive } = req.body
+  const created = await prisma.addon.create({
+    data: {
+      name,
+      price: Number(price) || 0,
+      unit: unit || null,
+      isActive: isActive !== undefined ? Boolean(isActive) : true,
+    },
+  })
+  const io = (req as any).app.get('io')
+  if (io) {
+    io.emit('catalog:updated', { type: 'addons' })
+  }
+  res.status(201).json(ok(created))
+}))
+
 adminRoutes.patch('/addons/:id', wrap(async (req, res) => {
   const id = Number(req.params.id)
-  const updated = await prisma.addon.update({ where: { id }, data: req.body })
+  const data: any = {}
+  if (req.body.name !== undefined) data.name = req.body.name
+  if (req.body.price !== undefined) data.price = Number(req.body.price)
+  if (req.body.unit !== undefined) data.unit = req.body.unit
+  if (req.body.isActive !== undefined) data.isActive = Boolean(req.body.isActive)
+
+  const updated = await prisma.addon.update({ where: { id }, data })
+  const io = (req as any).app.get('io')
+  if (io) {
+    io.emit('catalog:updated', { type: 'addons', id })
+  }
   res.json(ok(updated))
+}))
+
+adminRoutes.delete('/addons/:id', wrap(async (req, res) => {
+  const id = Number(req.params.id)
+  await prisma.addon.delete({ where: { id } })
+  const io = (req as any).app.get('io')
+  if (io) {
+    io.emit('catalog:updated', { type: 'addons', id })
+  }
+  res.json(ok({ deleted: true }))
+}))
+
+// ── Terms & Conditions & Settings Management ──
+adminRoutes.get('/terms', wrap(async (_req, res) => {
+  const setting = await prisma.setting.findUnique({ where: { key: 'terms' } })
+  if (!setting?.value) {
+    const defaultTerms = [
+      'Pemesanan dianggap sah setelah bukti pembayaran DP diverifikasi dan di-ACC oleh admin.',
+      'Reschedule maksimal 1x dan diajukan paling lambat H-3 sebelum acara, selebihnya dikenakan biaya.',
+      'Waktu layanan dihitung sejak photobooth siap digunakan di lokasi acara.',
+      'Keterlambatan akses venue akan mengurangi durasi layanan photobooth.',
+      'Pelunasan dilakukan sesuai batas waktu yang tertera pada invoice pembayaran.',
+      'Dengan melakukan pemesanan, pemesan dianggap telah menyetujui seluruh syarat dan ketentuan yang berlaku.',
+    ]
+    return res.json(ok(defaultTerms))
+  }
+  try {
+    res.json(ok(JSON.parse(setting.value)))
+  } catch {
+    res.json(ok([setting.value]))
+  }
+}))
+
+adminRoutes.put('/terms', wrap(async (req, res) => {
+  const { terms } = req.body
+  const val = typeof terms === 'string' ? terms : JSON.stringify(terms || [])
+  const saved = await prisma.setting.upsert({
+    where: { key: 'terms' },
+    update: { value: val },
+    create: { key: 'terms', value: val },
+  })
+  const io = (req as any).app.get('io')
+  if (io) {
+    io.emit('catalog:updated', { type: 'terms' })
+  }
+  res.json(ok({ saved: true, updatedAt: saved.updatedAt }))
 }))
 
 // ── Admin Users Management ──
