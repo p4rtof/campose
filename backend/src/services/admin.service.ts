@@ -61,6 +61,7 @@ export async function listBookings(page = 1, limit = 20, status?: string) {
       where,
       include: {
         package: true,
+        addons: { include: { addon: true } },
         payments: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
       orderBy: { createdAt: 'desc' },

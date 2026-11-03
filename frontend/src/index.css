@@ -51,3 +51,131 @@
 
 @keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
 .pop { animation: pop .25s ease-out both; }
+
+/* ═══════════════════════════════════════════════════════════════
+   PRINT STYLES — professional standalone invoice
+   ═══════════════════════════════════════════════════════════════ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm 16mm;
+  }
+
+  /* ── 1. Comprehensive hide of UI chrome (Customer & Admin) ──── */
+  aside,
+  header,
+  nav,
+  footer,
+  [data-noprint],
+  .noprint,
+  .fixed,
+  [role="dialog"],
+  [class*="assistant"],
+  [class*="backdrop"],
+  #kontak {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* ── 2. Reset Document and Layout Shells ─────────────────────── */
+  html, body {
+    background: #fff !important;
+    color: #241a24 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 11pt;
+  }
+
+  /* Neutralize admin layout offsets */
+  .lg\:pl-64,
+  [class*="pl-64"] {
+    padding-left: 0 !important;
+  }
+
+  main {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Remove all decorative backgrounds and min-heights */
+  .min-h-screen,
+  .silk-light,
+  section.silk-light,
+  .bg-canvas {
+    min-height: auto !important;
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* ── 3. Standalone Formal Invoice Document ──────────────────── */
+  .print-invoice-card {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    page-break-inside: avoid;
+  }
+
+  /* Make container holding the card full-width */
+  .print-invoice-card-container {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  /* ── 4. Show print-only elements ────────────────────────────── */
+  .print-only {
+    display: block !important;
+  }
+
+  /* ── 5. Invoice header bar: keep brand color ────────────────── */
+  .print-invoice-header {
+    border-radius: 0 !important;
+    padding: 20pt 24pt !important;
+    background-color: #1a76d2 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── 6. Table styling for print ─────────────────────────────── */
+  .print-invoice-table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  .print-invoice-table tr {
+    page-break-inside: avoid !important;
+  }
+
+  .print-invoice-table th,
+  .print-invoice-table td {
+    padding: 7pt 6pt !important;
+    font-size: 10pt !important;
+    vertical-align: middle !important;
+  }
+
+  /* ── 7. Typography & Element cleanup ────────────────────────── */
+  .card, .rounded-2xl, .rounded-xl {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  a {
+    text-decoration: none !important;
+    color: inherit !important;
+  }
+}
