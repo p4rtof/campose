@@ -8,6 +8,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ───────────── ENUM ─────────────
@@ -41,6 +42,7 @@ enum DateStatus {
   TERSEDIA
   PENUH
   DIBOOKING
+  LIBUR
 }
 
 enum Intent {

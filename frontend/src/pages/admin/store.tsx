@@ -580,9 +580,9 @@ export function Provider({ children }: { children: ReactNode }) {
 
   // 11. Action: Atur ketersediaan kalender
   const setDayAvailability = async (date: string, status: 'tersedia' | 'penuh' | 'libur') => {
-    const dbStatus = status === 'penuh' ? 'PENUH' : status === 'libur' ? 'DIBOOKING' : 'TERSEDIA'
+    const dbStatus = status === 'penuh' ? 'PENUH' : status === 'libur' ? 'LIBUR' : 'TERSEDIA'
     try {
-      await fetch(`${API}/availability`, {
+      const res = await fetch(`${API}/availability`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -590,8 +590,16 @@ export function Provider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ date, status: dbStatus }),
       })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error?.message || `HTTP ${res.status}`)
+      }
       setAvailability((prev) => ({ ...prev, [date]: status }))
-    } catch {}
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update availability'
+      toast(`Error: ${msg}`)
+      throw err
+    }
   }
 
   const get = (id?: string) => bookings.find((b) => b.id === id || b.inv === id) ?? bookings[0] ?? {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { io as socketIO } from 'socket.io-client'
 import { Icon } from '@/components/Icon'
-import { FEATURES, PACKAGES as DEFAULT_PACKAGES } from '@/data/catalog'
+import { FEATURES } from '@/data/catalog'
 import { WA } from '@/data/config'
 import { FlowSteps } from '@/features/booking/FlowSteps'
 import { useBooking } from '@/features/booking/booking-state'
@@ -10,6 +10,15 @@ import { occ } from '@/lib/image'
 import { navigate } from '@/lib/router'
 
 const BASE_URL = 'http://localhost:4000'
+
+type Package = {
+  id: number
+  name: string
+  hours: number
+  price: number
+  isPopular: boolean
+  isActive: boolean
+}
 
 type DynamicPackage = {
   id: number
@@ -23,44 +32,44 @@ type DynamicPackage = {
 
 export function BookingPage() {
   const { set } = useBooking()
-  const [packages, setPackages] = useState<DynamicPackage[]>(() =>
-    DEFAULT_PACKAGES.map((p) => ({
-      id: p.id,
-      dbId: p.id + 1,
-      title: p.title,
-      hours: p.hours,
-      price: p.price,
-      color: p.color,
-      popular: Boolean(p.popular),
-    })),
-  )
+  const [packages, setPackages] = useState<DynamicPackage[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const loadPackages = async () => {
+    setLoading(true)
+    setError(null)
     try {
       const res = await fetch(`${BASE_URL}/api/v1/packages`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
-        const colors = ['#FF5FBF', '#C26AE8', '#FF5A5A']
-        const mapped: DynamicPackage[] = json.data.map((item: any, idx: number) => ({
-          id: idx,
-          dbId: item.id,
-          title: item.name || `${item.hours} Jam`,
-          hours: item.hours,
-          price: item.price,
-          color: colors[idx % colors.length],
-          popular: Boolean(item.isPopular),
-        }))
-        setPackages(mapped)
+      
+      if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
+        throw new Error('No packages available from server')
       }
-    } catch {
-      // Fallback tetap menggunakan default packages
+
+      const colors = ['#FF5FBF', '#C26AE8', '#FF5A5A']
+      const mapped: DynamicPackage[] = json.data.map((item: Package, idx: number) => ({
+        id: idx,
+        dbId: item.id,
+        title: item.name || `${item.hours} Jam`,
+        hours: item.hours,
+        price: item.price,
+        color: colors[idx % colors.length],
+        popular: Boolean(item.isPopular),
+      }))
+      setPackages(mapped)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load packages'
+      setError(msg)
+    } finally {
+      setLoading(false)
     }
   }
 
   useEffect(() => {
     loadPackages()
 
-    // Realtime listener untuk perubahan harga / detail dari admin panel
     const socket = socketIO(BASE_URL, { 
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -87,8 +96,67 @@ export function BookingPage() {
     }
   }, [])
 
+  if (loading) {
+    return (
+      <section className="bg-white py-10 md:py-16 md:min-h-[900px]">
+        <div className="max-w-[1280px] mx-auto px-5 md:px-8">
+          <FlowSteps step={0} />
+          <div className="text-center mt-8 md:mt-12">
+            <p className="eyebrow">Pilih Paket</p>
+            <h1 className="mt-3 text-[28px] md:text-5xl font-extrabold uppercase text-brand">
+              Event Photobooth <span className="text-royal">Pricelist</span>
+            </h1>
+          </div>
+          <div className="mt-8 md:mt-14 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-2xl md:rounded-[28px] bg-slate-200 h-96 animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  if (error) {
+    return (
+      <section className="bg-white py-10 md:py-16 md:min-h-[900px]">
+        <div className="max-w-[1280px] mx-auto px-5 md:px-8">
+          <FlowSteps step={0} />
+          <div className="text-center mt-8 md:mt-12">
+            <div className="bg-red-50 border-2 border-red-300 rounded-lg p-6">
+              <p className="text-red-800 font-semibold">Failed to load packages</p>
+              <p className="text-red-600 text-sm mt-2">{error}</p>
+              <button
+                onClick={() => loadPackages()}
+                className="btn btn-primary mt-4"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  if (packages.length === 0) {
+    return (
+      <section className="bg-white py-10 md:py-16 md:min-h-[900px]">
+        <div className="max-w-[1280px] mx-auto px-5 md:px-8">
+          <FlowSteps step={0} />
+          <div className="text-center mt-8 md:mt-12">
+            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6">
+              <p className="text-yellow-800 font-semibold">No packages available</p>
+              <p className="text-yellow-600 text-sm mt-2">Please try again later or contact support</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
-    <section className="bg-white py-10 md:py-16 md:md:min-h-[900px]">
+    <section className="bg-white py-10 md:py-16 md:min-h-[900px]">
       <div className="max-w-[1280px] mx-auto px-5 md:px-8">
         <FlowSteps step={0} />
         <div className="text-center mt-8 md:mt-12">
@@ -142,7 +210,7 @@ export function BookingPage() {
                 </ul>
                 <button
                   onClick={() => {
-                    set({ pkg: p.id })
+                    set({ pkg: p.dbId })
                     navigate('/detail-pesanan')
                   }}
                   className="btn btn-primary mt-8 !h-14 w-full text-base cursor-pointer"

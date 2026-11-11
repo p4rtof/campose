@@ -68,6 +68,15 @@ routes.get('/availability/slots', validate(S.slotsQuery, 'query'), wrap(async (r
   res.json(ok({ date, slots: await freeSlots(date, hours) }))
 }))
 
+routes.get('/blocked-dates', wrap(async (_req, res) => {
+  const blocked = await prisma.availability.findMany({ 
+    where: { status: 'LIBUR' },
+    select: { date: true, note: true },
+    orderBy: { date: 'asc' }
+  })
+  res.json(ok(blocked))
+}))
+
 // ── Voucher & booking ──
 routes.post('/vouchers/validate', validate(S.voucherBody), wrap(async (req, res) => {
   const v = await checkVoucher(req.body.code)

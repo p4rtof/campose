@@ -11,18 +11,17 @@ export async function createBooking(input: BookingBody) {
   const q = await quote(input)
   const start = hourOf(input.startTime)
 
-  // Log untuk debugging
   console.log('Creating booking with addons:', q.items)
 
   return prisma.$transaction(
     async (tx) => {
-      // Cek slot di dalam transaksi supaya tidak ada double booking.
       const busy = await busyRanges(input.eventDate, tx)
       if (!isFree(start, q.pkg.hours, busy)) {
         throw new AppError(409, 'SLOT_TAKEN', 'Jam yang dipilih sudah dibooking. Pilih jam lain.')
       }
       const override = await tx.availability.findUnique({ where: { date: dayRange(input.eventDate) } })
       if (override?.status === 'PENUH') throw new AppError(409, 'SLOT_TAKEN', 'Tanggal tersebut sudah penuh.')
+      if (override?.status === 'LIBUR') throw new AppError(400, 'DATE_BLOCKED', 'Tanggal tersebut merupakan hari libur dan tidak dapat dibooking.')
 
       const year = new Date().getFullYear()
       const count = await tx.booking.count({ where: { code: { startsWith: `CMP-${year}-` } } })

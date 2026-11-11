@@ -305,13 +305,37 @@ adminRoutes.get('/availability', wrap(async (_req, res) => {
 
 adminRoutes.post('/availability', wrap(async (req, res) => {
   const { date, status, note } = req.body
+  if (!date || !status) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'date and status required' } })
+  }
   const d = new Date(`${date}T00:00:00Z`)
+  console.log(`[Availability] Setting ${date} to status ${status}`)
   const override = await prisma.availability.upsert({
     where: { date: d },
-    update: { status: status as any, note },
-    create: { date: d, status: status as any, note },
+    update: { status: status as any, note: note || null },
+    create: { date: d, status: status as any, note: note || null },
   })
+  console.log(`[Availability] Updated:`, override)
+  const io = (req as any).app.get('io')
+  if (io) {
+    io.emit('availability:updated', { date, status })
+  }
   res.json(ok(override))
+}))
+
+adminRoutes.delete('/availability/:date', wrap(async (req, res) => {
+  const dateStr = req.params.date
+  const d = new Date(`${dateStr}T00:00:00Z`)
+  try {
+    await prisma.availability.delete({ where: { date: d } })
+    const io = (req as any).app.get('io')
+    if (io) {
+      io.emit('availability:updated', { date: dateStr, deleted: true })
+    }
+    res.json(ok({ deleted: true }))
+  } catch (err) {
+    res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Availability record not found' } })
+  }
 }))
 
 // ── Addons Management ──
