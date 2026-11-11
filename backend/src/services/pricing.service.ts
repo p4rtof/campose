@@ -41,17 +41,17 @@ export async function quote(
   const addonRows = await db.addon.findMany({ where: { id: { in: requestedAddonIds }, isActive: true } })
   const allActiveAddons = await db.addon.findMany({ where: { isActive: true }, orderBy: { id: 'asc' } })
 
-  const items = input.addons.map((a) => {
-    let row = addonRows.find((r) => r.id === a.addonId)
-    // Fallback: jika ID addon frontend beda sequence dengan DB, cocokkan dengan urutan aktif
-    if (!row && allActiveAddons.length > 0) {
-      if (a.addonId >= 1 && a.addonId <= allActiveAddons.length) {
-        row = allActiveAddons[a.addonId - 1]
-      }
-    }
-    if (!row) throw new AppError(404, 'NOT_FOUND', `Add-on ${a.addonId} tidak ditemukan`)
-    return { addonId: row.id, name: row.name, qty: a.qty, price: row.price }
-  })
+   const items = input.addons.map((a) => {
+     let row = addonRows.find((r) => r.id === a.addonId)
+     if (!row) {
+       throw new AppError(404, 'NOT_FOUND', `Add-on dengan ID ${a.addonId} tidak ditemukan atau tidak aktif`)
+     }
+     const price = row.price || 0
+     if (price === 0) {
+       console.warn(`Warning: Add-on ${row.name} (ID: ${row.id}) memiliki price 0`)
+     }
+     return { addonId: row.id, name: row.name, qty: a.qty, price }
+   })
 
   const subtotal = pkg.price + items.reduce((s, i) => s + i.price * i.qty, 0)
   const voucher = input.voucherCode ? await checkVoucher(input.voucherCode, db) : null

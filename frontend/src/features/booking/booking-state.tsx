@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { ADDONS, PACKAGES, VOUCHERS } from '@/data/catalog'
 import { dateLabel, endTime } from '@/lib/format'
 
 export type Booking = {
@@ -10,13 +9,12 @@ export type Booking = {
   acara: string; tamu: string; instansi: string; addons: number[]; agree: boolean
 }
 
-// Ambil bulan & hari saat ini secara otomatis
 const now = new Date()
 const currentMonth = now.getMonth() + 1
 const currentDay = now.getDate()
 
 export const emptyBooking: Booking = { 
-  pkg: 1, 
+  pkg: 2, 
   month: currentMonth, 
   day: null, 
   time: null, 
@@ -54,14 +52,28 @@ export const demoBooking: Partial<Booking> = {
 export const BookingCtx = createContext<{ b: Booking; set: (p: Partial<Booking>) => void }>({ b: emptyBooking, set: () => {} })
 export const useBooking = () => useContext(BookingCtx)
 
-export function resolved(b: Booking) {
+export function resolved(b: Booking, dbPackages: any[], dbAddons: any[], vouchers: Record<string, number>) {
   const m = b.day ? b.month : demoBooking.month!
   const d = b.day ?? demoBooking.day!
   const t = b.day && b.time ? b.time : demoBooking.time!
-  const pkg = PACKAGES[b.pkg] || PACKAGES[1]
-  const addons = b.addons.map((i) => { const q = b.qty[i] ?? 1; return [ADDONS[i][0], ADDONS[i][1] * q, q] as [string, number, number] })
+  
+  const pkg = dbPackages.find(p => p.id === b.pkg)
+  if (!pkg) {
+    throw new Error(`Package with ID ${b.pkg} not found in database`)
+  }
+
+  const addons = b.addons.map((aId) => {
+    const q = b.qty[aId] ?? 1
+    const found = dbAddons.find(a => a.id === aId)
+    if (!found) {
+      throw new Error(`Addon with ID ${aId} not found in database`)
+    }
+    return [found.name, found.price * q, q] as [string, number, number]
+  })
+  
   const addonTotal = addons.reduce((s, a) => s + a[1], 0)
-  const discount = VOUCHERS[b.voucher] ?? 0
+  const discount = vouchers[b.voucher] ?? 0
+  
   return {
     pkg, month: m, day: d, time: t, date: dateLabel(m, d), range: `${t} – ${endTime(t, pkg.hours)} WIB`,
     lokasi: b.lokasi || demoBooking.lokasi!, jenis: b.jenis || demoBooking.jenis!,

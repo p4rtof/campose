@@ -153,7 +153,7 @@ export function HomePage() {
               <Icon n="pin" s={34} />
               <h3 className="mt-6 text-2xl font-bold uppercase tracking-wide">Photobox</h3>
               <p className="mt-2 text-white/95 text-sm leading-relaxed">Photobox self-service di lokasi mitra kami. Foto, cetak, langsung bawa pulang.</p>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold"><span className="px-3 py-1.5 rounded-full bg-white text-brand">Lekha Cafe</span><span className="px-3 py-1.5 rounded-full bg-white/20">Lokasi bisa bertambah</span></div>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold"><span className="px-3 py-1.5 rounded-full bg-white text-brand">Lekha Cafe</span></div>
               <p className="mt-4 text-sm flex-1 flex gap-2 items-start text-white/95"><Icon n="gift" s={18} className="shrink-0 mt-0.5" /> Dapatkan voucher dari promo mitra.</p>
               <Link to="/photobox" className="btn mt-6 !h-11 bg-white !text-brand hover:bg-[#eaf3fc]">Lihat Lokasi & Promo</Link>
             </div>
@@ -170,9 +170,9 @@ export function HomePage() {
               <h3 className="mt-6 text-2xl font-bold uppercase tracking-wide">Custom Frame</h3>
               <p className="mt-2 font-bold text-lg leading-snug">Design Your Photostrip (Free!)</p>
               <p className="mt-2 text-white/95 text-sm leading-relaxed">Rancang photostrip impianmu sendiri, gratis! Pilih tema dan warna, atur layout foto, lalu tambahkan nama acara atau logo biar tiap cetakan jadi kenangan yang personal.</p>
-              <ul className="mt-4 mb-1 space-y-2 text-sm flex-1">
+              {/* <ul className="mt-4 mb-1 space-y-2 text-sm flex-1">
                 {['Gratis, tanpa biaya desain', 'Tema, warna, dan layout bebas', 'Bisa tambah logo & teks acara'].map((t) => <li key={t} className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-white/25 grid place-items-center shrink-0"><Icon n="check" s={12} /></span>{t}</li>)}
-              </ul>
+              </ul> */}
               <a href={GFORM} target="_blank" rel="noreferrer" className="btn mt-6 !h-11 bg-white !text-[#9a3fc7] hover:bg-[#f7ecfd]">Buat Desain</a>
             </div>
             {/* Photo-Videography */}

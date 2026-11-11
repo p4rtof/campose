@@ -2,7 +2,7 @@ import type React from 'react'
 import { useState, useEffect, type ReactNode } from 'react'
 import { io as socketIO } from 'socket.io-client'
 import { Icon } from '@/components/Icon'
-import { ADDONS, FEATURES, PACKAGES } from '@/data/catalog'
+import { FEATURES } from '@/data/catalog'
 import {
   DStatus,
   SLOTS,
@@ -55,7 +55,6 @@ const L = ({ t, req, children }: { t: string; req?: boolean; children: React.Rea
 
 export function DetailPage() {
   const { b, set } = useBooking()
-  const p = PACKAGES[b.pkg] || PACKAGES[1]
   const [slide, setSlide] = useState(0)
   const [sheet, setSheet] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -64,7 +63,6 @@ export function DetailPage() {
   const [voucherMsg, setVoucherMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [applyingVoucher, setApplyingVoucher] = useState(false)
 
-  // 1. Tanggal & Waktu Realtime
   const today = new Date()
   const currentMonth = today.getMonth() + 1
   const currentYear = today.getFullYear()
@@ -75,14 +73,47 @@ export function DetailPage() {
   const first = new Date(selectedYear, b.month - 1, 1).getDay()
   const offset = (first + 6) % 7
   const dim = new Date(selectedYear, b.month, 0).getDate()
-  const r = resolved(b)
 
-  // 2. Ketersediaan tanggal dari database PostgreSQL
   const [dbMonthStatus, setDbMonthStatus] = useState<Record<string, { status: string; busyRanges?: any[] }>>({})
   const [slotsAvailability, setSlotsAvailability] = useState<Record<string, { available: boolean; reason?: string }>>({})
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [dbPackages, setDbPackages] = useState<any[]>([])
   const [dbAddons, setDbAddons] = useState<any[]>([])
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogError, setCatalogError] = useState<string | null>(null)
+  const [terms, setTerms] = useState<string[]>(TNC)
+  const [vouchers, setVouchers] = useState<Record<string, number>>({})
+  const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set())
+
+  const selectedPkg = dbPackages.find((x) => x.id === b.pkg)
+  const addonsList: { id: number; name: string; price: number; unit?: string | null }[] = dbAddons.map((item) => ({
+    id: item.id,
+    name: item.name,
+    price: item.price,
+    unit: item.unit,
+  }))
+
+  let r: any = null
+  try {
+    r = resolved(b, dbPackages, dbAddons, vouchers)
+  } catch (err) {
+    r = null
+  }
+
+  const pkgPrice = selectedPkg?.price ?? 0
+  const pkgTitle = selectedPkg?.name || '4 Jam'
+  const pkgHours = selectedPkg?.hours ?? 4
+  const p = selectedPkg ? { ...selectedPkg, price: pkgPrice, title: pkgTitle, hours: pkgHours } : null
+
+  const currentAddonTotal = b.addons.reduce((sum, aId) => {
+    const item = addonsList.find((a) => a.id === aId)
+    const price = item?.price || 0
+    const q = b.qty[aId] ?? 1
+    return sum + price * q
+  }, 0)
+  const subtotal = pkgPrice + currentAddonTotal
+  const discount = r?.discount || 0
+  const currentTotal = Math.max(0, subtotal - discount)
 
   const applyVoucher = async () => {
     if (!voucherInput.trim()) {
@@ -96,6 +127,7 @@ export function DetailPage() {
       const data = await res.json()
       if (res.ok && data.data) {
         set({ voucher: voucherInput.toUpperCase() })
+        setVouchers(prev => ({ ...prev, [voucherInput.toUpperCase()]: data.data.discount }))
         setVoucherMsg({ type: 'success', text: `Voucher berhasil diterapkan! Diskon: Rp${data.data.discount?.toLocaleString('id-ID')}` })
         setVoucherInput('')
       } else {
@@ -108,25 +140,56 @@ export function DetailPage() {
     }
   }
 
-  // Ambil paket & add-on dari database backend
-  useEffect(() => {
-    fetch(`${BASE_URL}/api/v1/packages`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.data && Array.isArray(data.data)) {
-          setDbPackages(data.data)
-        }
-      })
-      .catch((e) => console.warn('Gagal memuat paket dari server:', e))
+  const loadCatalogData = async () => {
+    setCatalogLoading(true)
+    setCatalogError(null)
+    try {
+      const [pkgRes, addonRes, termsRes, blockedRes] = await Promise.all([
+        fetch(`${BASE_URL}/api/v1/packages`),
+        fetch(`${BASE_URL}/api/v1/addons`),
+        fetch(`${BASE_URL}/api/v1/terms`),
+        fetch(`${BASE_URL}/api/v1/blocked-dates`),
+      ])
 
-    fetch(`${BASE_URL}/api/v1/addons`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.data && Array.isArray(data.data)) {
-          setDbAddons(data.data)
-        }
-      })
-      .catch((e) => console.warn('Gagal memuat addon dari server:', e))
+      if (!pkgRes.ok) throw new Error(`Packages: HTTP ${pkgRes.status}`)
+      if (!addonRes.ok) throw new Error(`Addons: HTTP ${addonRes.status}`)
+
+      const pkgData = await pkgRes.json()
+      const addonData = await addonRes.json()
+      const termsData = await termsRes.json()
+      const blockedData = await blockedRes.json()
+
+      if (!pkgData.success || !Array.isArray(pkgData.data) || pkgData.data.length === 0) {
+        throw new Error('No packages available')
+      }
+      if (!addonData.success || !Array.isArray(addonData.data)) {
+        throw new Error('Invalid addons data')
+      }
+
+      setDbPackages(pkgData.data)
+      setDbAddons(addonData.data)
+      
+      if (termsData.success && Array.isArray(termsData.data) && termsData.data.length > 0) {
+        setTerms(termsData.data)
+      }
+
+      if (blockedData.success && Array.isArray(blockedData.data)) {
+        const blockedDatesArray: string[] = blockedData.data.map((item: any) => {
+          const d = new Date(item.date)
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        })
+        setBlockedDates(new Set<string>(blockedDatesArray))
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load catalog'
+      setCatalogError(msg)
+    } finally {
+      setCatalogLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadCatalogData()
   }, [])
 
   // Fetch status bulan dari backend
@@ -174,38 +237,61 @@ export function DetailPage() {
 
   useEffect(() => {
     if (b.day) {
-      fetchSlotsForDate(selectedYear, b.month, b.day, p?.hours || 2)
+      fetchSlotsForDate(selectedYear, b.month, b.day, pkgHours)
     }
-  }, [b.day, b.month, selectedYear, p?.hours])
+  }, [b.day, b.month, selectedYear, pkgHours])
 
-  // Realtime Socket.IO: jika ada booking baru yang masuk atau dikonfirmasi, refresh otomatis
+  // Realtime Socket.IO: jika ada perubahan harga / booking / payment, refresh otomatis
   useEffect(() => {
-    const socket = socketIO(BASE_URL, { transports: ['websocket', 'polling'] })
+    const socket = socketIO(BASE_URL, { 
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+    })
+
+    socket.on('connect', () => {
+      console.log('[DetailPage] Socket.IO connected')
+    })
+    
+    socket.on('connect_error', (err) => {
+      console.warn('[DetailPage] Socket.IO connection error:', err.message)
+    })
+
     socket.on('booking:created', () => {
       fetchMonthAvailability(selectedYear, b.month)
-      if (b.day) fetchSlotsForDate(selectedYear, b.month, b.day, p?.hours || 2)
+      if (b.day) fetchSlotsForDate(selectedYear, b.month, b.day, pkgHours)
     })
     socket.on('payment:confirmed', () => {
       fetchMonthAvailability(selectedYear, b.month)
-      if (b.day) fetchSlotsForDate(selectedYear, b.month, b.day, p?.hours || 2)
+      if (b.day) fetchSlotsForDate(selectedYear, b.month, b.day, pkgHours)
     })
+
+    socket.on('availability:updated', () => {
+      loadCatalogData()
+      fetchMonthAvailability(selectedYear, b.month)
+    })
+
     return () => {
       socket.disconnect()
     }
-  }, [selectedYear, b.month, b.day, p?.hours])
+  }, [selectedYear, b.month, b.day, pkgHours])
 
   // Cek status satu tanggal di kalender
   const getDateStatus = (day: number): DStatus => {
-    // 1. Cek jika sudah kemarin / lampau
     if (isPastDate(selectedYear, b.month, day)) {
       return 'lewat'
     }
 
-    // 2. Cek status dari database PostgreSQL
     const dateKey = `${selectedYear}-${String(b.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    
+    if (blockedDates.has(dateKey)) {
+      return 'penuh'
+    }
+
     const dbItem = dbMonthStatus[dateKey]
     if (dbItem) {
-      if (dbItem.status === 'PENUH') return 'penuh'
+      if (dbItem.status === 'PENUH' || dbItem.status === 'LIBUR') return 'penuh'
       if (dbItem.status === 'DIBOOKING') return 'dibooking'
       if (dbItem.status === 'LEWAT') return 'lewat'
     }
@@ -273,26 +359,15 @@ export function DetailPage() {
     const cleanWa = b.wa.replace(/[\s-]/g, '')
     const cleanTime = b.time ? (b.time.length === 4 ? `0${b.time}` : b.time) : ''
     
-    // Sesuaikan packageId dengan database backend
-    let realPackageId = 1
-    if (dbPackages.length > 0) {
-      const matchByHours = dbPackages.find((pkg) => pkg.hours === p?.hours)
-      const matchByIndex = dbPackages[b.pkg]
-      realPackageId = (matchByHours || matchByIndex || dbPackages[0]).id
-    } else {
-      const packageIdMap: Record<number, number> = { 0: 1, 1: 2, 2: 3 }
-      realPackageId = packageIdMap[b.pkg] || (b.pkg + 1)
-    }
+     // packageId is the database ID stored in b.pkg
+     const realPackageId = b.pkg || selectedPkg?.id || 2
 
     // Sesuaikan addonId dengan database backend
-    const mappedAddons = b.addons.map((addonIdx) => {
-      let realAddonId = addonIdx + 1
-      if (dbAddons.length > addonIdx) {
-        realAddonId = dbAddons[addonIdx].id
-      }
+    const mappedAddons = b.addons.map((aId) => {
+      const found = addonsList.find((item) => item.id === aId)
       return {
-        addonId: realAddonId,
-        qty: b.qty[addonIdx] ?? 1,
+        addonId: found?.id || aId,
+        qty: b.qty[aId] ?? 1,
       }
     })
 
@@ -346,30 +421,60 @@ export function DetailPage() {
           <Icon n="left" s={16} /> Ganti paket
         </Link>
 
-        {/* Paket Card */}
-        <div className="mt-4 card overflow-hidden grid grid-cols-1 lg:grid-cols-2">
-          <div className="relative">
-            <div key={slide} className="pop grayscale h-full min-h-[240px] md:min-h-[300px]" style={{ ...occ(slide), aspectRatio: 'auto' }} />
-            <button aria-label="Foto sebelumnya" onClick={() => setSlide((slide + 2) % 3)} className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 grid place-items-center cursor-pointer"><Icon n="left" /></button>
-            <button aria-label="Foto berikutnya" onClick={() => setSlide((slide + 1) % 3)} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 grid place-items-center cursor-pointer"><Icon n="right" /></button>
-            <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2">
-              {[0, 1, 2].map((i) => <span key={i} className={`h-2 rounded-full transition-all ${i === slide ? 'w-6 bg-white' : 'w-2 bg-white/60'}`} />)}
+        {catalogLoading && (
+          <div className="mt-8 card p-8">
+            <div className="flex items-center gap-3">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand"></div>
+              <p className="text-ink/70">Loading package and add-on data from database...</p>
             </div>
           </div>
-          <div className="p-5 md:p-8 lg:p-10">
-            <span className="inline-block px-4 py-1 rounded-lg font-extrabold border-[3px]" style={{ borderColor: p?.color }}>{p?.title}</span>
-            <h1 className="mt-4 text-3xl font-extrabold uppercase">Paket Photobooth {p?.title}</h1>
-            <div className="mt-2 text-3xl md:text-4xl font-extrabold text-royal">{fmt(p?.price || 0)}</div>
-            <ul className="mt-6 space-y-4">
-              {FEATURES.map((f) => (
-                <li key={f.t} className="flex gap-3 text-sm">
-                  <Icon n="check" s={18} className="text-brand mt-0.5 shrink-0" />
-                  <span><b>{f.t}</b><br /><span className="text-ink/65">{f.d}</span></span>
-                </li>
-              ))}
-            </ul>
+        )}
+
+        {catalogError && (
+          <div className="mt-8 card p-8 bg-red-50 border-2 border-red-300">
+            <p className="text-red-800 font-semibold">Failed to load catalog data</p>
+            <p className="text-red-600 text-sm mt-2">{catalogError}</p>
+            <button onClick={() => loadCatalogData()} className="btn btn-primary mt-4">
+              Retry
+            </button>
           </div>
-        </div>
+        )}
+
+        {!catalogLoading && !catalogError && !p && (
+          <div className="mt-8 card p-8 bg-yellow-50 border-2 border-yellow-300">
+            <p className="text-yellow-800 font-semibold">Package not found</p>
+            <p className="text-yellow-600 text-sm mt-2">The selected package (ID: {b.pkg}) is not available. Please select another package.</p>
+            <Link to="/booking-photobooth" className="btn btn-primary mt-4">
+              Choose Package
+            </Link>
+          </div>
+        )}
+
+        {!catalogLoading && !catalogError && p && (
+          <>
+            <div className="mt-4 card overflow-hidden grid grid-cols-1 lg:grid-cols-2">
+              <div className="relative">
+                <div key={slide} className="pop grayscale h-full min-h-[240px] md:min-h-[300px]" style={{ ...occ(slide), aspectRatio: 'auto' }} />
+                <button aria-label="Foto sebelumnya" onClick={() => setSlide((slide + 2) % 3)} className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 grid place-items-center cursor-pointer"><Icon n="left" /></button>
+                <button aria-label="Foto berikutnya" onClick={() => setSlide((slide + 1) % 3)} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 grid place-items-center cursor-pointer"><Icon n="right" /></button>
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2">
+                  {[0, 1, 2].map((i) => <span key={i} className={`h-2 rounded-full transition-all ${i === slide ? 'w-6 bg-white' : 'w-2 bg-white/60'}`} />)}
+                </div>
+              </div>
+              <div className="p-5 md:p-8 lg:p-10">
+                <span className="inline-block px-4 py-1 rounded-lg font-extrabold border-[3px]" style={{ borderColor: '#C26AE8' }}>{p.title}</span>
+                <h1 className="mt-4 text-3xl font-extrabold uppercase">Paket Photobooth {p.title}</h1>
+                <div className="mt-2 text-3xl md:text-4xl font-extrabold text-royal">{fmt(p.price)}</div>
+                <ul className="mt-6 space-y-4">
+                  {FEATURES.map((f) => (
+                    <li key={f.t} className="flex gap-3 text-sm">
+                      <Icon n="check" s={18} className="text-brand mt-0.5 shrink-0" />
+                      <span><b>{f.t}</b><br /><span className="text-ink/65">{f.d}</span></span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
 
         {/* Form Pilihan Tanggal & Jam */}
         <div className="mt-8 md:mt-10 space-y-6 md:space-y-8">
@@ -559,22 +664,27 @@ export function DetailPage() {
           {/* Section Add On & Submit */}
           <Section n={4} t="Pilih Add On & Booking">
             <div className="grid md:grid-cols-2 gap-3">
-              {ADDONS.map(([n, pr], i) => {
-                const on = b.addons.includes(i)
-                const per = n.includes('(per')
-                const q = b.qty[i] ?? 1
+              {addonsList.map((addon) => {
+                const id = addon.id
+                const on = b.addons.includes(id)
+                const per = Boolean(addon.unit || addon.name.includes('(per'))
+                const q = b.qty[id] ?? 1
                 return (
-                  <div key={n} className={`flex items-center gap-3 rounded-2xl border-2 px-5 py-4 transition ${on ? 'border-brand bg-[#eef5fd]' : 'border-[#d6e4f5] bg-white hover:border-brand/60'}`}>
+                  <div key={id} className={`flex items-center gap-3 rounded-2xl border-2 px-5 py-4 transition ${on ? 'border-brand bg-[#eef5fd]' : 'border-[#d6e4f5] bg-white hover:border-brand/60'}`}>
                     <label className="flex items-center gap-4 flex-1 cursor-pointer">
-                      <input type="checkbox" className="sr-only" checked={on} onChange={() => toggle(i)} />
+                      <input type="checkbox" className="sr-only" checked={on} onChange={() => toggle(id)} />
                       <span className={`w-6 h-6 rounded-md grid place-items-center border-2 shrink-0 ${on ? 'bg-brand border-brand text-white' : 'border-[#b8cbe3] bg-white'}`}>{on && <Icon n="check" s={14} />}</span>
-                      <span className="flex-1 font-medium text-sm leading-snug">{n}<span className="block font-bold text-royal">{fmt(pr)}</span></span>
+                      <span className="flex-1 font-medium text-sm leading-snug">
+                        {addon.name}
+                        {addon.unit && <span className="text-xs text-ink/50 ml-1">({addon.unit})</span>}
+                        <span className="block font-bold text-royal">{fmt(addon.price)}</span>
+                      </span>
                     </label>
                     {on && per && (
                       <span className="flex items-center gap-2" aria-label="Jumlah">
-                        <button aria-label="Kurangi" onClick={() => set({ qty: { ...b.qty, [i]: Math.max(1, q - 1) } })} className="w-8 h-8 rounded-full border border-brand text-brand grid place-items-center"><Icon n="minus" s={14} /></button>
+                        <button aria-label="Kurangi" onClick={() => set({ qty: { ...b.qty, [id]: Math.max(1, q - 1) } })} className="w-8 h-8 rounded-full border border-brand text-brand grid place-items-center"><Icon n="minus" s={14} /></button>
                         <b className="w-5 text-center">{q}</b>
-                        <button aria-label="Tambah" onClick={() => set({ qty: { ...b.qty, [i]: q + 1 } })} className="w-8 h-8 rounded-full bg-brand text-white grid place-items-center"><Icon n="plus" s={14} /></button>
+                        <button aria-label="Tambah" onClick={() => set({ qty: { ...b.qty, [id]: q + 1 } })} className="w-8 h-8 rounded-full bg-brand text-white grid place-items-center"><Icon n="plus" s={14} /></button>
                       </span>
                     )}
                   </div>
@@ -616,17 +726,17 @@ export function DetailPage() {
 
             <div className="hidden md:block mt-8 rounded-2xl bg-[#F3F6FB] p-7">
               <h3 className="eyebrow mb-4">Ringkasan Pesanan</h3>
-              <div className="flex justify-between py-2 text-sm"><span className="text-ink/60">Harga Paket Photobooth {p?.title}</span><b>{fmt(p?.price || 0)}</b></div>
-              <div className="flex justify-between py-2 text-sm"><span className="text-ink/60">Total Add On ({b.addons.length})</span><b>{fmt(r.addonTotal)}</b></div>
+              <div className="flex justify-between py-2 text-sm"><span className="text-ink/60">Harga Paket Photobooth {pkgTitle}</span><b>{fmt(pkgPrice)}</b></div>
+              <div className="flex justify-between py-2 text-sm"><span className="text-ink/60">Total Add On ({b.addons.length})</span><b>{fmt(currentAddonTotal)}</b></div>
               {r.discount > 0 && <div className="flex justify-between py-2 text-sm text-[#16a34a] font-semibold"><span>Diskon Voucher ({r.voucher})</span><b>-{fmt(r.discount)}</b></div>}
-              <div className="mt-4 pt-4 border-t-2 border-dashed border-[#bcd5f2] flex justify-between items-end"><span className="font-extrabold uppercase tracking-wider">Total Harga</span><span className="text-4xl font-extrabold text-royal">{fmt(r.total)}</span></div>
+              <div className="mt-4 pt-4 border-t-2 border-dashed border-[#bcd5f2] flex justify-between items-end"><span className="font-extrabold uppercase tracking-wider">Total Harga</span><span className="text-4xl font-extrabold text-royal">{fmt(currentTotal)}</span></div>
             </div>
 
             <div className="mt-8 rounded-2xl bg-white border border-[#e3edf9] border-t-[6px] border-t-brand shadow-sm p-5 md:p-7 lg:p-9">
               <h3 className="text-center text-xl font-extrabold uppercase tracking-[.14em]">Syarat dan Ketentuan</h3>
               <hr className="my-5 border-[#e3edf9]" />
               <ol className="space-y-3 text-sm leading-relaxed text-ink/80 list-decimal list-outside pl-5 marker:font-bold marker:text-brand">
-                {TNC.map((t) => <li key={t} className="pl-2">{t}</li>)}
+                {terms.map((t, idx) => <li key={idx} className="pl-2">{t}</li>)}
               </ol>
             </div>
 
@@ -642,40 +752,46 @@ export function DetailPage() {
             {Object.keys(errors).length > 0 && <p className="hidden md:block mt-3 text-xs text-red-600 text-center font-semibold">Mohon perbaiki kesalahan di atas sebelum melanjutkan.</p>}
           </Section>
         </div>
+            </>
+        )}
       </div>
 
       {/* Mobile Sticky Bar */}
-      <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#d6e4f5] shadow-[0_-10px_30px_-12px_rgba(26,118,210,.35)] px-4 pt-3 pb-4">
-        <button onClick={() => setSheet(true)} className="w-full flex items-center justify-between text-left min-h-[44px]" aria-label="Lihat rincian pesanan">
-          <span><span className="block text-xs text-ink/55">Total Harga · lihat rincian</span><span className="text-xl font-extrabold text-royal">{fmt(r.total)}</span></span>
-          <span className="w-9 h-9 rounded-full bg-[#e6f2ff] text-brand grid place-items-center"><Icon n="down" s={18} className="rotate-180" /></span>
-        </button>
-        <button onClick={() => (Object.keys(errors).length === 0 && ready && b.agree ? handleBookingSubmit() : setSheet(true))} disabled={loading || !b.agree || Object.keys(errors).length > 0 || !ready} className={`btn btn-primary mt-2 !h-12 w-full ${Object.keys(errors).length === 0 && ready && b.agree ? '' : 'opacity-70 cursor-not-allowed'}`}>
-          {loading ? 'Memproses...' : 'Booking Sekarang'}
-        </button>
-      </div>
-
-      {sheet && (
-        <div className="md:hidden fixed inset-0 z-50 bg-black/50 flex items-end" onClick={() => setSheet(false)}>
-          <div className="pop w-full max-h-[85vh] overflow-y-auto bg-white rounded-t-3xl p-5 pb-8" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between"><h3 className="text-lg font-extrabold uppercase tracking-wide">Ringkasan Pesanan</h3><button aria-label="Tutup" onClick={() => setSheet(false)} className="w-10 h-10 grid place-items-center rounded-full bg-[#F3F6FB]"><Icon n="x" s={18} /></button></div>
-            <dl className="mt-4 space-y-3 text-sm">
-              {[['Paket', `Photobooth ${p?.title}`], ['Tanggal', b.day ? dateLabel(b.month, b.day) : '—'], ['Jam', b.time ? `${b.time} – ${endTime(b.time, p?.hours || 2)} WIB` : '—'], ['Lokasi', b.lokasi || '—']].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-4"><dt className="text-ink/55">{k}</dt><dd className="font-semibold text-right break-words min-w-0">{v}</dd></div>
-              ))}
-            </dl>
-            <div className="my-4 border-t-2 border-dashed border-[#d6e4f5]" />
-            <div className="flex justify-between text-sm py-1"><span className="text-ink/60">Harga Paket</span><b>{fmt(p?.price || 0)}</b></div>
-            <div className="flex justify-between text-sm py-1"><span className="text-ink/60">Total Add On ({b.addons.length})</span><b>{fmt(r.addonTotal)}</b></div>
-            {r.discount > 0 && <div className="flex justify-between text-sm py-1 text-[#16a34a] font-semibold"><span>Diskon Voucher ({r.voucher})</span><b>-{fmt(r.discount)}</b></div>}
-            <div className="mt-4 pt-4 border-t-2 border-dashed border-[#d6e4f5] flex justify-between items-end"><span className="font-extrabold uppercase text-sm tracking-wider">Total Harga</span><span className="text-3xl font-extrabold text-royal">{fmt(r.total)}</span></div>
-            {Object.keys(errors).length > 0 && <p className="mt-4 text-sm text-red-600 font-bold">Mohon perbaiki kesalahan di atas.</p>}
-            {(!ready || !b.agree) && Object.keys(errors).length === 0 && <p className="mt-4 text-xs text-coral font-medium">Lengkapi dulu: {missing}.</p>}
-            <button disabled={loading || !b.agree || Object.keys(errors).length > 0 || !ready} onClick={handleBookingSubmit} className="btn btn-primary mt-4 !h-12 w-full disabled:opacity-50 disabled:cursor-not-allowed">
+      {!catalogLoading && !catalogError && p && (
+        <>
+          <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#d6e4f5] shadow-[0_-10px_30px_-12px_rgba(26,118,210,.35)] px-4 pt-3 pb-4">
+            <button onClick={() => setSheet(true)} className="w-full flex items-center justify-between text-left min-h-[44px]" aria-label="Lihat rincian pesanan">
+              <span><span className="block text-xs text-ink/55">Total Harga · lihat rincian</span><span className="text-xl font-extrabold text-royal">{fmt(currentTotal)}</span></span>
+              <span className="w-9 h-9 rounded-full bg-[#e6f2ff] text-brand grid place-items-center"><Icon n="down" s={18} className="rotate-180" /></span>
+            </button>
+            <button onClick={() => (Object.keys(errors).length === 0 && ready && b.agree ? handleBookingSubmit() : setSheet(true))} disabled={loading || !b.agree || Object.keys(errors).length > 0 || !ready} className={`btn btn-primary mt-2 !h-12 w-full ${Object.keys(errors).length === 0 && ready && b.agree ? '' : 'opacity-70 cursor-not-allowed'}`}>
               {loading ? 'Memproses...' : 'Booking Sekarang'}
             </button>
           </div>
-        </div>
+
+          {sheet && (
+            <div className="md:hidden fixed inset-0 z-50 bg-black/50 flex items-end" onClick={() => setSheet(false)}>
+              <div className="pop w-full max-h-[85vh] overflow-y-auto bg-white rounded-t-3xl p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between"><h3 className="text-lg font-extrabold uppercase tracking-wide">Ringkasan Pesanan</h3><button aria-label="Tutup" onClick={() => setSheet(false)} className="w-10 h-10 grid place-items-center rounded-full bg-[#F3F6FB]"><Icon n="x" s={18} /></button></div>
+                <dl className="mt-4 space-y-3 text-sm">
+                  {[['Paket', `Photobooth ${pkgTitle}`], ['Tanggal', b.day ? dateLabel(b.month, b.day) : '—'], ['Jam', b.time ? `${b.time} – ${endTime(b.time, pkgHours)} WIB` : '—'], ['Lokasi', b.lokasi || '—']].map(([k, v]) => (
+                    <div key={k} className="flex justify-between gap-4"><dt className="text-ink/55">{k}</dt><dd className="font-semibold text-right break-words min-w-0">{v}</dd></div>
+                  ))}
+                </dl>
+                <div className="my-4 border-t-2 border-dashed border-[#d6e4f5]" />
+                <div className="flex justify-between text-sm py-1"><span className="text-ink/60">Harga Paket</span><b>{fmt(pkgPrice)}</b></div>
+                <div className="flex justify-between text-sm py-1"><span className="text-ink/60">Total Add On ({b.addons.length})</span><b>{fmt(currentAddonTotal)}</b></div>
+                {r && r.discount > 0 && <div className="flex justify-between text-sm py-1 text-[#16a34a] font-semibold"><span>Diskon Voucher ({r.voucher})</span><b>-{fmt(r.discount)}</b></div>}
+                <div className="mt-4 pt-4 border-t-2 border-dashed border-[#d6e4f5] flex justify-between items-end"><span className="font-extrabold uppercase text-sm tracking-wider">Total Harga</span><span className="text-3xl font-extrabold text-royal">{fmt(currentTotal)}</span></div>
+                {Object.keys(errors).length > 0 && <p className="mt-4 text-sm text-red-600 font-bold">Mohon perbaiki kesalahan di atas.</p>}
+                {(!ready || !b.agree) && Object.keys(errors).length === 0 && <p className="mt-4 text-xs text-coral font-medium">Lengkapi dulu: {missing}.</p>}
+                <button disabled={loading || !b.agree || Object.keys(errors).length > 0 || !ready} onClick={handleBookingSubmit} className="btn btn-primary mt-4 !h-12 w-full disabled:opacity-50 disabled:cursor-not-allowed">
+                  {loading ? 'Memproses...' : 'Booking Sekarang'}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </section>
   )

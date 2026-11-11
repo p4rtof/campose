@@ -31,6 +31,26 @@ routes.get('/addons', wrap(async (_req, res) => {
 routes.get('/reviews', wrap(async (_req, res) => {
   res.json(ok(await prisma.review.findMany({ where: { isPublished: true }, orderBy: { createdAt: 'desc' } })))
 }))
+routes.get('/terms', wrap(async (_req, res) => {
+  const setting = await prisma.setting.findUnique({ where: { key: 'terms' } })
+  if (!setting?.value) {
+    const defaultTerms = [
+      'Pemesanan dianggap sah setelah bukti pembayaran DP diverifikasi dan di-ACC oleh admin.',
+      'Reschedule maksimal 1x dan diajukan paling lambat H-3 sebelum acara, selebihnya dikenakan biaya.',
+      'Waktu layanan dihitung sejak photobooth siap digunakan di lokasi acara.',
+      'Keterlambatan akses venue akan mengurangi durasi layanan photobooth.',
+      'Pelunasan dilakukan sesuai batas waktu yang tertera pada invoice pembayaran.',
+      'Dengan melakukan pemesanan, pemesan dianggap telah menyetujui seluruh syarat dan ketentuan yang berlaku.',
+    ]
+    return res.json(ok(defaultTerms))
+  }
+  try {
+    const parsed = JSON.parse(setting.value)
+    res.json(ok(parsed))
+  } catch {
+    res.json(ok([setting.value]))
+  }
+}))
 
 // ── Jadwal ──
 routes.get('/availability', validate(S.monthQuery, 'query'), wrap(async (req, res) => {
@@ -46,6 +66,15 @@ routes.get('/availability/slots', validate(S.slotsQuery, 'query'), wrap(async (r
     hours = pkg?.hours || 2
   }
   res.json(ok({ date, slots: await freeSlots(date, hours) }))
+}))
+
+routes.get('/blocked-dates', wrap(async (_req, res) => {
+  const blocked = await prisma.availability.findMany({ 
+    where: { status: 'LIBUR' },
+    select: { date: true, note: true },
+    orderBy: { date: 'asc' }
+  })
+  res.json(ok(blocked))
 }))
 
 // ── Voucher & booking ──

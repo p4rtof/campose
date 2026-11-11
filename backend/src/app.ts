@@ -16,7 +16,13 @@ export const httpServer = createServer(app)
 
 // Socket.IO
 export const io = new SocketIOServer(httpServer, {
-  cors: { origin: corsOrigins, credentials: true },
+  cors: { 
+    origin: corsOrigins, 
+    credentials: true,
+    methods: ['GET', 'POST'],
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
 })
 
 // Simpan io di app supaya bisa diakses dari route handler
@@ -41,7 +47,17 @@ io.on('connection', (socket) => {
 })
 
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' }, // izinkan akses gambar upload
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://app.sandbox.midtrans.com", "https://snap-assets.sandbox.midtrans.com", "'unsafe-inline'"],
+      connectSrc: ["'self'", "ws://localhost:4000", "http://localhost:4000"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:", "http:"],
+      fontSrc: ["'self'", "https:", "data:"],
+    },
+  },
 }))
 app.use(cors({ origin: corsOrigins }))
 app.use(express.json({ limit: '10mb' }))

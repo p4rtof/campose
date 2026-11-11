@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { PAYCHIP, PKG, ADDONS, price, rp, useApp, Booking, fd, BASE_URL } from './store'
+import { useEffect, useState } from 'react'
+import { PAYCHIP, PKG, ADDONS, price, rp, useApp, Booking, BookingAddonItem, fd, BASE_URL } from './store'
 import { A } from './router'
-import { BackLink, Btn, Card, Crumbs, Icon, Logo, Modal, PageHead, cx } from './ui'
+import { BackLink, Btn, Card, Crumbs, Icon, Modal, PageHead, cx } from './ui'
+import { Logo as BrandLogo } from '@/components/Brand'
 
 export function Payments() {
   const { bookings, toast } = useApp()
@@ -138,7 +139,7 @@ export function Payments() {
 
 function Qr() {
   return (
-    <svg viewBox="0 0 21 21" className="size-28" shapeRendering="crispEdges">
+    <svg viewBox="0 0 21 21" className="size-24" shapeRendering="crispEdges">
       {[...Array(21 * 21)].map((_, i) => {
         const x = i % 21, y = Math.floor(i / 21)
         const f = (x < 7 && y < 7) || (x > 13 && y < 7) || (x < 7 && y > 13)
@@ -156,9 +157,34 @@ function Qr() {
 export function Invoice() {
   const { route, get, confirmPayment, toast } = useApp()
   const b: Booking = get(route.id)
-  const pr = price(b)
+  const [detailAddons, setDetailAddons] = useState<BookingAddonItem[] | null>(null)
   const [dlg, setDlg] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // Fetch full detail if opened directly or to guarantee fresh addons snapshot
+  useEffect(() => {
+    if (!b || !b.inv || b.inv === 'CMP-2026-0000') return
+    const token = typeof window !== 'undefined' ? (sessionStorage.getItem('campose-token') || localStorage.getItem('admin_token') || '') : ''
+    let isMounted = true
+    fetch(`${BASE_URL}/api/v1/admin/bookings/${b.inv}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        if (isMounted && res.success && res.data?.addons) {
+          const items: BookingAddonItem[] = res.data.addons.map((a: any) => ({
+            id: a.id || a.addonId,
+            name: a.addon?.name || a.name || 'Add-on',
+            qty: a.qty || 1,
+            price: a.price !== undefined ? a.price : (a.addon?.price || 0),
+            total: (a.price !== undefined ? a.price : (a.addon?.price || 0)) * (a.qty || 1),
+          }))
+          setDetailAddons(items)
+        }
+      })
+      .catch(() => {})
+    return () => { isMounted = false }
+  }, [b.inv])
 
   const handleManualPaid = async () => {
     setLoading(true)
@@ -167,132 +193,324 @@ export function Invoice() {
     setDlg(false)
   }
 
+  const handlePrint = () => {
+    window.print()
+  }
+
+  const isPaid = b.pay === 'Lunas'
+
+  // Resolve add-on items: prefer fresh detailAddons from direct API, fallback to b.addonItems or b.addons
+  const activeAddons: BookingAddonItem[] =
+    detailAddons && detailAddons.length > 0
+      ? detailAddons
+      : b.addonItems && b.addonItems.length > 0
+      ? b.addonItems
+      : (b.addons || []).map((name) => {
+          const unitPrice = ADDONS[name] || 0
+          return {
+            name,
+            qty: 1,
+            price: unitPrice,
+            total: unitPrice,
+          }
+        })
+
+  const pkgPrice = b.pkgPrice || PKG[b.pkg] || 1299000
+  const addonsSubtotal = activeAddons.reduce((sum, a) => sum + (a.total !== undefined ? a.total : a.price * a.qty), 0)
+  const subtotalBeforeDiscount = pkgPrice + addonsSubtotal
+  const pr = price(b)
+  const discountAmount = b.discount !== undefined ? b.discount : pr.disc
+  const finalTotal = b.totalPrice && b.totalPrice > 0 ? b.totalPrice : Math.max(0, subtotalBeforeDiscount - discountAmount)
+
   return (
-    <div>
-      <Crumbs items={[['Pembayaran', '/admin/pembayaran'], [b.inv]]} />
-      <BackLink to="/admin/pembayaran">Kembali ke pembayaran</BackLink>
-      <PageHead
-        title={`Invoice ${b.inv}`}
-        sub="Pratinjau detail transaksi dan instruksi pembayaran"
-        actions={
-          <>
-            <Btn icon="list" to={'/admin/booking/' + b.inv}>Lihat Detail Booking</Btn>
-            <Btn icon="download" onClick={() => window.print()}>Cetak / Simpan PDF</Btn>
-            {b.pay !== 'Lunas' && (
-              <Btn v="primary" icon="check" onClick={() => setDlg(true)}>
-                ACC / Tandai Lunas Manual
-              </Btn>
-            )}
-          </>
-        }
-      />
+    <div className="print-invoice-card-container">
+      {/* ── Screen Only: Admin Breadcrumbs, Header, Action Buttons ── */}
+      <div data-noprint>
+        <Crumbs items={[['Pembayaran', '/admin/pembayaran'], [b.inv]]} />
+        <BackLink to="/admin/pembayaran">Kembali ke pembayaran</BackLink>
+        <PageHead
+          title={`Invoice ${b.inv}`}
+          sub="Pratinjau detail transaksi dan instruksi pembayaran"
+          actions={
+            <>
+              <Btn icon="list" to={'/admin/booking/' + b.inv}>Lihat Detail Booking</Btn>
+              <Btn icon="download" onClick={handlePrint}>Cetak / Simpan PDF</Btn>
+              {!isPaid && (
+                <Btn v="primary" icon="check" onClick={() => setDlg(true)}>
+                  ACC / Tandai Lunas Manual
+                </Btn>
+              )}
+            </>
+          }
+        />
 
-      {/* Alert Bukti Bayar */}
-      {b.paymentProofUrl && (
-        <Card className="mb-5 p-4 bg-purple-50 border border-purple-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-lg bg-purple-600 text-white">
-              <Icon n="card" s={20} />
-            </span>
-            <div>
-              <p className="font-bold text-sm text-purple-900">Bukti Pembayaran Tersedia</p>
-              <p className="text-xs text-purple-700">Customer telah melampirkan screenshot pembayaran.</p>
+        {/* Alert Bukti Bayar */}
+        {b.paymentProofUrl && (
+          <Card className="mb-5 p-4 bg-purple-50 border border-purple-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-lg bg-purple-600 text-white">
+                <Icon n="card" s={20} />
+              </span>
+              <div>
+                <p className="font-bold text-sm text-purple-900">Bukti Pembayaran Tersedia</p>
+                <p className="text-xs text-purple-700">Customer telah melampirkan screenshot pembayaran.</p>
+              </div>
             </div>
-          </div>
-          <Btn v="primary" to={'/admin/booking/' + b.inv}>
-            Tinjau di Halaman Booking
-          </Btn>
-        </Card>
-      )}
+            <Btn v="primary" to={'/admin/booking/' + b.inv}>
+              Tinjau di Halaman Booking
+            </Btn>
+          </Card>
+        )}
+      </div>
 
-      <Card className="mx-auto max-w-2xl overflow-hidden shadow-lg">
-        <div className="flex items-center justify-between bg-brand p-5 text-white">
-          <Logo admin={false} size={26} />
-          <div className="text-right text-xs">
-            <p className="font-semibold">{b.inv}</p>
-            <p>Terbit {fd(b.date)}</p>
-          </div>
-        </div>
-        <div className="space-y-5 p-5 md:p-7">
+      {/* ═══════════════════════════════════════════════════════
+          INVOICE DOCUMENT
+          Printed as a standalone A4 formal document.
+          On-screen it sits inside the clean admin card container.
+         ═══════════════════════════════════════════════════════ */}
+      <div className="mx-auto max-w-3xl overflow-hidden card bg-white print-invoice-card shadow-lg">
+        {/* ── HEADER ──────────────────────────────────────── */}
+        <div className="bg-brand text-white px-6 py-6 md:px-10 md:py-8 print-invoice-header">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs text-slate-500">Ditagihkan kepada</p>
-              <p className="font-semibold text-base">{b.name}</p>
-              <p className="text-sm text-slate-600">
-                {b.email}
-                <br />
-                {b.wa}
+              <BrandLogo light size={36} />
+              <p className="mt-3 text-white/70 text-xs leading-relaxed">
+                PT Campose Indonesia<br />
+                campose.indonesia@gmail.com<br />
+                +62 821-2477-8747
               </p>
             </div>
-            <span className={cx('rounded-full px-3 py-1 text-sm font-semibold', PAYCHIP[b.pay])}>
-              {b.pay}
-            </span>
+            <div className="text-right">
+              <p className="text-xs uppercase tracking-[.2em] text-white/60">Invoice</p>
+              <p className="text-2xl md:text-3xl font-extrabold mt-1">#{b.inv}</p>
+              <p className="text-sm text-white/80 mt-2">
+                Tanggal: {fd(b.date, { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+              <div className="mt-3">
+                <span
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full ${
+                    isPaid
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : b.pay === 'Bukti Diunggah'
+                      ? 'bg-purple-100 text-purple-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  <i
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      isPaid
+                        ? 'bg-emerald-500'
+                        : b.pay === 'Bukti Diunggah'
+                        ? 'bg-purple-500'
+                        : 'bg-amber-500'
+                    }`}
+                  />
+                  {b.pay.toUpperCase()}
+                </span>
+              </div>
+            </div>
           </div>
+        </div>
 
-          <div className="rounded-xl bg-canvas p-4 text-sm">
-            <p className="font-semibold">{b.event}</p>
-            <p className="text-slate-600">
-              {fd(b.date)} · {b.start}–{b.end} · {b.loc}
+        {/* ── BILLING + EVENT INFO ────────────────────────── */}
+        <div className="px-6 md:px-10 pt-7 pb-2 grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Bill To */}
+          <div>
+            <p className="text-[11px] uppercase tracking-[.18em] font-bold text-slate-400 mb-2">
+              Ditagihkan Kepada
+            </p>
+            <p className="font-semibold text-base text-ink">{b.name}</p>
+            <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+              {b.email}<br />
+              {b.wa}
             </p>
           </div>
 
-          <dl className="divide-y divide-slate-100 text-sm">
-            <div className="flex justify-between py-2">
-              <dt>Paket Photobooth {b.pkg} Jam</dt>
-              <dd>{rp(PKG[b.pkg] || 0)}</dd>
-            </div>
-            {b.addons.map((a) => (
-              <div key={a} className="flex justify-between py-2">
-                <dt>{a}</dt>
-                <dd>{rp(ADDONS[a] || 0)}</dd>
-              </div>
-            ))}
-            {b.voucher && (
-              <div className="flex justify-between py-2 text-emerald-600 font-semibold">
-                <dt>Voucher {b.voucher}</dt>
-                <dd>-{rp(pr.disc)}</dd>
-              </div>
-            )}
-            <div className="flex justify-between py-3 text-base font-bold">
-              <dt>Total</dt>
-              <dd className="text-brand text-lg">{rp(pr.total)}</dd>
-            </div>
-          </dl>
-
-          <div className="flex items-center gap-5 border-t border-dashed border-slate-300 pt-5">
-            {b.method === 'QRIS Dinamis' ? (
-              <Qr />
-            ) : (
-              <Icon n="card" s={56} className="text-brand shrink-0" />
-            )}
-            <div className="text-sm">
-              <p className="font-semibold">{b.method}</p>
-              <p className="text-slate-600">
-                Transfer ke BCA 123 456 7890 a.n. PT Campose Indonesia.
+          {/* Event details */}
+          <div>
+            <p className="text-[11px] uppercase tracking-[.18em] font-bold text-slate-400 mb-2">
+              Detail Acara
+            </p>
+            <div className="text-sm text-slate-700 space-y-1">
+              {b.event && (
+                <p className="font-semibold text-ink">{b.event}</p>
+              )}
+              <p>
+                <span className="text-slate-400 inline-block w-16">Tanggal</span>
+                {fd(b.date, { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
-              {b.paidAt && <p className="mt-1 text-emerald-600 font-medium">Dibayar pada {b.paidAt}</p>}
+              <p>
+                <span className="text-slate-400 inline-block w-16">Waktu</span>
+                {b.start && b.end ? `${b.start} – ${b.end} WIB` : '—'}
+              </p>
+              <p>
+                <span className="text-slate-400 inline-block w-16">Lokasi</span>
+                {b.loc || '—'}
+              </p>
             </div>
           </div>
         </div>
-      </Card>
 
-      <Modal
-        open={dlg}
-        onClose={() => setDlg(false)}
-        title="Tandai Lunas Manual?"
-        footer={
-          <>
-            <Btn full onClick={() => setDlg(false)}>Batal</Btn>
-            <Btn v="primary" full loading={loading} onClick={handleManualPaid}>
-              Ya, Tandai Lunas
-            </Btn>
-          </>
-        }
-      >
-        <p className="text-sm text-slate-600">
-          Booking #{b.inv} akan otomatis dikonfirmasi dan statusnya akan tersinkron ke database secara realtime.
-        </p>
-      </Modal>
+        {/* ── ITEMIZED TABLE ──────────────────────────────── */}
+        <div className="px-6 md:px-10 pt-4 pb-6">
+          <table className="w-full text-sm print-invoice-table">
+            <thead>
+              <tr className="border-b-2 border-brand/20 text-left">
+                <th className="py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider">Item / Layanan</th>
+                <th className="py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider text-center w-16">Qty</th>
+                <th className="py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider text-right w-36">Harga Satuan</th>
+                <th className="py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider text-right w-36">Jumlah</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {/* 1. Base Package Row */}
+              <tr>
+                <td className="py-3.5 text-ink">
+                  <div className="font-semibold text-slate-900">
+                    Paket Photobooth {b.pkg} Jam
+                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Unlimited prints · Custom template frame · Standar props & backdrop
+                  </div>
+                </td>
+                <td className="py-3.5 text-center text-slate-600 font-medium">1</td>
+                <td className="py-3.5 text-right text-slate-600 tabular-nums">{rp(pkgPrice)}</td>
+                <td className="py-3.5 text-right font-semibold text-slate-900 tabular-nums">{rp(pkgPrice)}</td>
+              </tr>
+
+              {/* 2. Add-on Items Rows */}
+              {activeAddons.length > 0 && activeAddons.map((item, idx) => (
+                <tr key={idx} className="bg-blue-50/20 print:bg-transparent">
+                  <td className="py-3 text-ink">
+                    <div className="flex items-center gap-2">
+                      <span className="size-1.5 rounded-full bg-brand shrink-0" />
+                      <span className="font-medium text-slate-800">{item.name}</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider bg-blue-100/70 text-brand px-1.5 py-0.5 rounded border border-blue-200/50 print:border-slate-300">
+                        Add-on
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-3 text-center text-slate-700 font-medium tabular-nums">{item.qty}</td>
+                  <td className="py-3 text-right text-slate-600 tabular-nums">{rp(item.price)}</td>
+                  <td className="py-3 text-right font-medium text-slate-900 tabular-nums">{rp(item.total)}</td>
+                </tr>
+              ))}
+
+              {/* 3. Transport Row */}
+              <tr>
+                <td className="py-3 text-ink">
+                  <div className="text-slate-700">Biaya Transport Wilayah Jabodetabek</div>
+                  <div className="text-xs text-slate-400">Gratis ongkir untuk area operasional Jabodetabek</div>
+                </td>
+                <td className="py-3 text-center text-slate-400">—</td>
+                <td className="py-3 text-right text-emerald-600 font-medium">Gratis</td>
+                <td className="py-3 text-right text-emerald-600 font-medium">Rp0</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* ── SUBTOTALS & FINANCIAL BREAKDOWN ───────────── */}
+          <div className="mt-5 border-t-2 border-slate-200 pt-4">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              {/* Summary note / item count */}
+              <div className="text-xs text-slate-500 space-y-1">
+                <p className="font-semibold text-slate-700 uppercase tracking-wider text-[11px]">Rincian Pembiayaan</p>
+                <p>• Paket Photobooth: <span className="font-medium text-slate-700">{rp(pkgPrice)}</span></p>
+                <p>• Layanan Tambahan (Add-on): <span className="font-medium text-slate-700">{activeAddons.length} item ({rp(addonsSubtotal)})</span></p>
+                <p>• Biaya Transportasi: <span className="text-emerald-600 font-medium">Gratis (Jabodetabek)</span></p>
+              </div>
+
+              {/* Detailed calculation box */}
+              <div className="w-full sm:max-w-xs space-y-2 text-sm bg-slate-50/90 p-4 rounded-xl border border-slate-200/70 print:bg-white print:border-slate-300">
+                <div className="flex justify-between text-slate-600">
+                  <span>Harga Paket (Base)</span>
+                  <span className="font-medium tabular-nums text-slate-800">{rp(pkgPrice)}</span>
+                </div>
+
+                <div className="flex justify-between text-slate-600">
+                  <span className="flex items-center gap-1.5">
+                    Subtotal Add-on
+                    {activeAddons.length > 0 && (
+                      <span className="text-[11px] font-semibold text-brand">({activeAddons.length})</span>
+                    )}
+                  </span>
+                  <span className="font-medium tabular-nums text-slate-800">{rp(addonsSubtotal)}</span>
+                </div>
+
+                <div className="flex justify-between text-slate-700 pt-1.5 border-t border-slate-200">
+                  <span className="font-medium">Subtotal</span>
+                  <span className="font-semibold tabular-nums text-slate-900">{rp(subtotalBeforeDiscount)}</span>
+                </div>
+
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-600 font-medium">
+                    <span>Diskon Voucher ({b.voucher || 'PROMO'})</span>
+                    <span className="tabular-nums">-{rp(discountAmount)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between border-t-2 border-brand pt-2.5 mt-2">
+                  <span className="text-base font-bold text-ink">Total Akhir</span>
+                  <span className="text-xl font-extrabold text-brand tabular-nums">{rp(finalTotal)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── PAYMENT INFO ───────────────────────────────── */}
+        <div className="mx-6 md:mx-10 border-t border-dashed border-slate-300 py-5">
+          <p className="text-[11px] uppercase tracking-[.18em] font-bold text-slate-400 mb-3">
+            Instruksi & Metode Pembayaran
+          </p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-sm text-slate-600">
+            <div>
+              <p>Metode: <strong className="text-ink">{b.method}</strong></p>
+              <p className="mt-1">
+                Transfer ke <strong className="text-ink">BCA 123 456 7890</strong> a.n. <strong className="text-ink">PT Campose Indonesia</strong>
+              </p>
+              {b.paidAt && (
+                <p className="mt-2 text-emerald-600 font-semibold text-sm">
+                  ✓ Pembayaran diverifikasi pada {b.paidAt}
+                </p>
+              )}
+            </div>
+            {b.method === 'QRIS Dinamis' && (
+              <div className="shrink-0 p-2 border border-slate-200 rounded-xl bg-white" data-noprint>
+                <Qr />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── FOOTER — always visible, formal invoice footer ──── */}
+        <div className="bg-slate-50 px-6 md:px-10 py-4 text-center text-xs text-slate-400 border-t border-slate-100">
+          <p>Invoice ini diterbitkan secara otomatis oleh <strong className="text-slate-500">PT Campose Indonesia</strong></p>
+          <p className="mt-0.5">campose.id · campose.indonesia@gmail.com · +62 821-2477-8747</p>
+          <p className="mt-0.5">Dokumen ini sah sebagai bukti pemesanan tanpa memerlukan tanda tangan.</p>
+        </div>
+      </div>
+
+      {/* ── Modal — disembunyikan saat print ── */}
+      <div data-noprint>
+        <Modal
+          open={dlg}
+          onClose={() => setDlg(false)}
+          title="Tandai Lunas Manual?"
+          footer={
+            <>
+              <Btn full onClick={() => setDlg(false)}>Batal</Btn>
+              <Btn v="primary" full loading={loading} onClick={handleManualPaid}>
+                Ya, Tandai Lunas
+              </Btn>
+            </>
+          }
+        >
+          <p className="text-sm text-slate-600">
+            Booking #{b.inv} akan otomatis dikonfirmasi dan statusnya akan tersinkron ke database secara realtime.
+          </p>
+        </Modal>
+      </div>
     </div>
   )
 }

@@ -9,7 +9,17 @@ export const API = `${BASE_URL}/api/v1/admin`
 export type Status = 'menunggu' | 'terkonfirmasi' | 'dibatalkan' | 'selesai' | 'reschedule'
 export type PayStatus = 'Menunggu' | 'Bukti Diunggah' | 'Lunas' | 'Ditolak' | 'Kedaluwarsa' | 'Gagal'
 
+export type BookingAddonItem = {
+  id?: number
+  name: string
+  qty: number
+  price: number
+  total: number
+}
+
 export type Booking = {
+  pkgName?: string
+  pkgPrice?: number
   id: string
   inv: string
   name: string
@@ -24,6 +34,9 @@ export type Booking = {
   guests: number
   note: string
   addons: string[]
+  addonItems?: BookingAddonItem[]
+  subtotal?: number
+  discount?: number
   voucher?: string
   status: Status
   method: 'QRIS Dinamis' | 'Transfer Bank'
@@ -73,15 +86,20 @@ export const fd = (d: string, o: Intl.DateTimeFormatOptions = { day: 'numeric', 
 export const TODAY = new Date().toISOString().slice(0, 10)
 
 export function price(b: Booking) {
-  if (b.totalPrice !== undefined && b.totalPrice > 0) {
-    const base = PKG[b.pkg] || 1299000
-    return { base, add: 0, disc: 0, total: b.totalPrice }
+  const base = b.pkgPrice || PKG[b.pkg] || 1299000
+  let add = 0
+  if (b.addonItems && b.addonItems.length > 0) {
+    add = b.addonItems.reduce((s, a) => s + (a.total !== undefined ? a.total : a.price * a.qty), 0)
+  } else {
+    add = (b.addons || []).reduce((s, a) => s + (ADDONS[a] || 0), 0)
   }
-  const base = PKG[b.pkg] || 1299000
-  const add = (b.addons || []).reduce((s, a) => s + (ADDONS[a] || 0), 0)
   const v = b.voucher ? VOUCHERS[b.voucher] : undefined
-  const disc = v ? (v.type === 'persen' ? Math.round(((base + add) * v.val) / 100) : v.val) : 0
-  return { base, add, disc, total: Math.max(0, base + add - disc) }
+  const disc = b.discount !== undefined
+    ? b.discount
+    : (v ? (v.type === 'persen' ? Math.round(((base + add) * v.val) / 100) : v.val) : 0)
+  const calcTotal = Math.max(0, base + add - disc)
+  const total = b.totalPrice !== undefined && b.totalPrice > 0 ? b.totalPrice : calcTotal
+  return { base, add, disc, total, subtotal: base + add }
 }
 
 export const STATUS: Record<Status, { label: string; chip: string; dot: string; block: string }> = {
@@ -135,6 +153,7 @@ function mapDbBooking(raw: any): Booking {
 
   const rawDate = typeof raw.eventDate === 'string' ? raw.eventDate.slice(0, 10) : new Date(raw.eventDate).toISOString().slice(0, 10)
   const pkgHours = (raw.package?.hours === 8 ? 8 : raw.package?.hours === 2 ? 2 : 4) as 2 | 4 | 8
+  const pkgPrice = raw.package?.price || PKG[pkgHours] || 1299000
 
   return {
     id: raw.id,
@@ -150,7 +169,17 @@ function mapDbBooking(raw: any): Booking {
     event: raw.eventName || raw.eventType || 'Event Photobooth',
     guests: raw.guestCount || 0,
     note: raw.notes || '',
-    addons: raw.addons?.map((a: any) => a.addon?.name).filter(Boolean) || [],
+    pkgName: raw.package?.name || undefined,
+    pkgPrice,
+    addons: (raw.addons || []).map((a: any) => a.addon?.name || a.name).filter(Boolean),
+    addonItems: (raw.addons || []).map((a: any) => {
+      const name = a.addon?.name || a.name || 'Add-on';
+      const qty = a.qty || 1;
+      const price = a.price !== undefined ? a.price : (a.addon?.price !== undefined ? a.addon.price : (ADDONS[name] || 0));
+      return { id: a.id || a.addonId, name, qty, price, total: price * qty };
+    }),
+    subtotal: raw.subtotal !== undefined ? raw.subtotal : undefined,
+    discount: raw.discount !== undefined ? raw.discount : undefined,
     voucher: raw.voucherCode || undefined,
     status: statusMap[raw.status] || 'menunggu',
     method: latestPay?.method === 'QRIS' ? 'QRIS Dinamis' : 'Transfer Bank',
@@ -296,10 +325,26 @@ export function Provider({ children }: { children: ReactNode }) {
   // 4. Setup Realtime Socket.IO
   useEffect(() => {
     if (!token) return
-    const socket = socketIO(BASE_URL, { transports: ['websocket', 'polling'] })
+    const socket = socketIO(BASE_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
+    })
     socketRef.current = socket
 
-    socket.emit('admin:join', token)
+    socket.on('connect', () => {
+      socket.emit('admin:join', token)
+    })
+
+    socket.on('connect_error', (error) => {
+      console.warn('Socket connection error:', error)
+    })
+
+    socket.on('disconnect', () => {
+      console.log('Socket disconnected')
+    })
 
     // Customer baru membuat booking di website
     socket.on('booking:created', (data: any) => {
@@ -535,9 +580,9 @@ export function Provider({ children }: { children: ReactNode }) {
 
   // 11. Action: Atur ketersediaan kalender
   const setDayAvailability = async (date: string, status: 'tersedia' | 'penuh' | 'libur') => {
-    const dbStatus = status === 'penuh' ? 'PENUH' : status === 'libur' ? 'DIBOOKING' : 'TERSEDIA'
+    const dbStatus = status === 'penuh' ? 'PENUH' : status === 'libur' ? 'LIBUR' : 'TERSEDIA'
     try {
-      await fetch(`${API}/availability`, {
+      const res = await fetch(`${API}/availability`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -545,8 +590,16 @@ export function Provider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ date, status: dbStatus }),
       })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error?.message || `HTTP ${res.status}`)
+      }
       setAvailability((prev) => ({ ...prev, [date]: status }))
-    } catch {}
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update availability'
+      toast(`Error: ${msg}`)
+      throw err
+    }
   }
 
   const get = (id?: string) => bookings.find((b) => b.id === id || b.inv === id) ?? bookings[0] ?? {

@@ -95,6 +95,24 @@ async function main() {
     },
   })
 
+  // ── Terms & Conditions ──
+  const defaultTerms = [
+    'Pemesanan dianggap sah setelah bukti pembayaran DP diverifikasi dan di-ACC oleh admin.',
+    'Reschedule maksimal 1x dan diajukan paling lambat H-3 sebelum acara, selebihnya dikenakan biaya.',
+    'Waktu layanan dihitung sejak photobooth siap digunakan di lokasi acara.',
+    'Keterlambatan akses venue akan mengurangi durasi layanan photobooth.',
+    'Pelunasan dilakukan sesuai batas waktu yang tertera pada invoice pembayaran.',
+    'Dengan melakukan pemesanan, pemesan dianggap telah menyetujui seluruh syarat dan ketentuan yang berlaku.',
+  ]
+  await prisma.setting.upsert({
+    where: { key: 'terms' },
+    update: {},
+    create: {
+      key: 'terms',
+      value: JSON.stringify(defaultTerms),
+    },
+  })
+
   console.log('✅ Seed selesai')
   console.log('   Admin: admin@campose.id | Password: admin123')
 }

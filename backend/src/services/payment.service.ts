@@ -61,7 +61,9 @@ export async function markPaid(id: string) {
   return prisma.$transaction(async (tx) => {
     const paid = await tx.payment.update({ where: { id }, data: { status: 'PAID', paidAt: new Date() } })
     const b = await tx.booking.update({ where: { id: p.bookingId }, data: { status: 'TERKONFIRMASI' } })
-    if (b.voucherCode) await tx.voucher.update({ where: { code: b.voucherCode }, data: { used: { increment: 1 } } })
+    if (b.voucherCode) {
+      await tx.voucher.update({ where: { code: b.voucherCode }, data: { used: { increment: 1 } } })
+    }
     
     // Kirim email otomatis jalan di background
     sendInvoiceEmail(b.email, b.customerName, b.code).catch(console.error);

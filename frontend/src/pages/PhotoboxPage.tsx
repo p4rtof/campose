@@ -33,6 +33,7 @@ export function PhotoboxPage() {
               </ul>
               <a href="https://maps.app.goo.gl/rikLCFZkUHdxoLMC7" target="_blank" rel="noreferrer" className="btn btn-outline !h-11 mt-6">Buka di Maps</a>
             </article>
+            
             <article className="rounded-2xl md:rounded-3xl border-2 border-dashed border-[#bcd5f2] bg-[#F3F6FB] p-6 md:p-8 grid place-items-center text-center">
               <div><span className="w-14 h-14 rounded-2xl bg-white text-brand grid place-items-center mx-auto"><Icon n="plus" s={26} /></span><h3 className="mt-4 text-lg font-bold">Lokasi baru segera hadir</h3><p className="mt-1 text-sm text-ink/60">Lokasi Photobox bisa bertambah sesuai kemitraan.</p></div>
             </article>
