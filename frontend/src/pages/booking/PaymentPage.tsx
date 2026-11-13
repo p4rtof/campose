@@ -31,7 +31,7 @@ export function PaymentPage() {
 
   const queryParams = new URLSearchParams(window.location.search)
   const invoiceCode = queryParams.get('code') || 'CMP-0001'
-  const BASE_URL = import.meta.env.VITE_API_URL || 'https://campose-production-0a2aea92.up.railway.app/api/v1';
+  const BASE_URL = import.meta.env.VITE_API_URL || 'https://campose-production-0a2aea92.up.railway.app';
 
   useEffect(() => {
     const init = async () => {
