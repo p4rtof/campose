@@ -446,3 +446,66 @@ adminRoutes.post('/users', wrap(async (req, res) => {
   })
   res.status(201).json(ok(user))
 }))
+
+
+// ── Chatbot Logs & Inquiry Insights (Untuk Dashboard Admin & Data Science) ──
+adminRoutes.get('/chat/sessions', wrap(async (req, res) => {
+  const limit = Number(req.query.limit) || 50
+  const sessions = await prisma.chatSession.findMany({
+    include: {
+      messages: { orderBy: { id: 'asc' } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  })
+  res.json(ok(sessions))
+}))
+
+adminRoutes.get('/dashboard/inquiry-insights', wrap(async (_req, res) => {
+  // Hitung distribusi kategori intent dari pertanyaan user di chatbot
+  const grouped = await prisma.chatMessage.groupBy({
+    by: ['intent'],
+    where: { role: 'user', intent: { not: null } },
+    _count: { id: true },
+  })
+
+  const totalInquiries = grouped.reduce((acc, curr) => acc + curr._count.id, 0)
+  const intentDistribution = grouped.map((item) => ({
+    intent: item.intent,
+    count: item._count.id,
+    percentage: totalInquiries > 0 ? Math.round((item._count.id / totalInquiries) * 100) : 0,
+  }))
+
+  // Ambil 10 pertanyaan terbaru dari pelanggan
+  const recentQuestions = await prisma.chatMessage.findMany({
+    where: { role: 'user' },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+    select: { id: true, content: true, intent: true, confidence: true, createdAt: true },
+  })
+
+  res.json(
+    ok({
+      totalInquiries,
+      intentDistribution,
+      recentQuestions,
+    })
+  )
+}))
+
+// ── Partnership / Franchise Leads Management ──
+adminRoutes.get('/partnership-leads', wrap(async (_req, res) => {
+  const leads = await prisma.partnershipLead.findMany({
+    orderBy: { createdAt: 'desc' },
+  })
+  res.json(ok(leads))
+}))
+
+adminRoutes.patch('/partnership-leads/:id/handle', wrap(async (req, res) => {
+  const id = Number(req.params.id)
+  const updated = await prisma.partnershipLead.update({
+    where: { id },
+    data: { handled: Boolean(req.body.handled ?? true) },
+  })
+  res.json(ok(updated))
+}))

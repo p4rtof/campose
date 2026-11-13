@@ -67,16 +67,18 @@ Base URL: `/api/v1` (Express). Layanan AI/DS (FastAPI) hanya dipanggil oleh Expr
 - Status tanggal: `TERSEDIA` (masih ada slot), `DIBOOKING` (sebagian terisi), `PENUH` (tidak ada slot tersisa), plus override admin dari tabel `Availability`.
 - `POST /bookings` mengecek slot di dalam transaksi database; bentrok → `409 SLOT_TAKEN`.
 
-### Voucher & Booking
+### Voucher, Booking, & Pembayaran Manual
 
 | Method | Endpoint | Keterangan |
 |---|---|---|
-| POST | `/vouchers/validate` | Cek voucher |
-| POST | `/bookings/quote` | Hitung harga (tanpa menyimpan) |
-| POST | `/bookings` | Buat booking → status `MENUNGGU_PEMBAYARAN` |
-| GET | `/bookings/:code` | Detail / invoice (untuk halaman invoice & status) |
-| POST | `/bookings/:code/payments` | Buat pembayaran DP |
-| GET | `/payments/:id` | Status pembayaran (polling) |
+| POST | `/vouchers/validate` | Cek validitas kode voucher |
+| POST | `/bookings/quote` | Hitung estimasi harga (tanpa menyimpan) |
+| POST | `/bookings` | Buat booking baru → status `MENUNGGU_PEMBAYARAN` |
+| GET | `/bookings/:code` | Detail booking / invoice |
+| POST | `/bookings/:code/payments` | Buat sesi pembayaran manual (`TRANSFER_MANUAL`) |
+| GET | `/bookings/:code/payment-status` | Cek status pembayaran booking (polling customer) |
+| POST | `/payments/:id/upload-proof` | Unggah foto bukti bayar (`multipart/form-data`, field: `proof`) → status `MENUNGGU_KONFIRMASI` & kirim notifikasi ke Admin |
+| GET | `/payments/:id` | Detail pembayaran berdasarkan ID |
 
 `POST /vouchers/validate`
 ```json
@@ -150,21 +152,20 @@ Di luar konteks usaha → `intent: "LAINNYA"` + penolakan sopan.
 
 ## 2. Admin (JWT)
 
-| Method | Endpoint | Role | Keterangan |
-|---|---|---|---|
-| POST | `/auth/login` | - | `{ email, password }` → `{ token, user }` |
-| GET | `/auth/me` | semua | Profil admin |
-| GET | `/admin/bookings?status=&from=&to=&q=&page=&limit=` | semua | Daftar booking + pencarian |
-| GET | `/admin/bookings/:code` | semua | Detail |
-| PATCH | `/admin/bookings/:code/status` | OWNER, ADMIN | `{ "status": "TERKONFIRMASI" }` |
-| GET | `/admin/availability?month=` | semua | Kalender & jadwal |
-| PUT | `/admin/availability/:date` | OWNER, ADMIN | Override status tanggal |
-| GET | `/admin/payments` | OWNER, ADMIN | Daftar pembayaran & invoice |
-| GET/POST/PATCH/DELETE | `/admin/vouchers` | OWNER, ADMIN | CRUD voucher |
-| GET/POST/PATCH | `/admin/packages`, `/admin/addons` | OWNER | Kelola harga |
-| GET/PATCH | `/admin/reviews` | OWNER, ADMIN | Moderasi review |
-| GET | `/admin/partnership-leads` | semua | Daftar calon mitra |
-| GET | `/admin/chat/sessions` | semua | Log percakapan |
+| Method | Endpoint | Keterangan |
+|---|---|---|
+| POST | `/admin/auth/login` | Login admin (`{ email, password }` → `{ token, admin }`) |
+| GET | `/admin/stats` | Ringkasan metrik utama dashboard (total booking, menunggu konfirmasi, terkonfirmasi, pendapatan) |
+| GET | `/admin/dashboard/inquiry-insights` | Statistik jumlah pertanyaan per kategori `intent` AI & daftar pertanyaan terbaru |
+| GET | `/admin/bookings` | Daftar seluruh booking (mendukung paginasi & filter `status`) |
+| POST | `/admin/bookings/manual` | Input pencatatan booking manual oleh admin |
+| PATCH | `/admin/bookings/:code/reschedule` | Ubah jadwal tanggal/jam acara |
+| PATCH | `/admin/bookings/:code/cancel` | Batalkan pesanan photobooth |
+| GET | `/admin/payments/pending` | Daftar pembayaran berstatus `MENUNGGU_KONFIRMASI` |
+| POST | `/admin/payments/:id/confirm` | Checklist verifikasi terima bukti bayar → status `PAID`/`TERKONFIRMASI` & kirim email konfirmasi ke pelanggan |
+| POST | `/admin/payments/:id/reject` | Tolak bukti bayar dengan catatan (`adminNote`) → status `DITOLAK` & kirim email ke pelanggan |
+| GET | `/admin/chat/sessions` | Riwayat sesi percakapan pelanggan dengan AI Assistant |
+| GET | `/admin/partnership-leads` | Daftar pengajuan calon mitra franchise |
 
 ### Dashboard
 
