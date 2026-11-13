@@ -129,22 +129,22 @@ export async function sendBookingConfirmedEmail(data: BookingEmailData) {
 
       <div class="card">
         <div class="card-title">📋 Rincian Jadwal & Pemesanan</div>
-        <div class="row"><span class="label">Kode Booking : </span><span class="value">${data.code}</span></div>
-        <div class="row"><span class="label">Nama Pemesan : </span><span class="value">${data.customerName}</span></div>
-        <div class="row"><span class="label">Nomor WhatsApp : </span><span class="value">${data.whatsapp}</span></div>
-        <div class="row"><span class="label">Tanggal Acara : </span><span class="value">${formattedDate}</span></div>
-        <div class="row"><span class="label">Waktu Layanan : </span><span class="value">${data.startTime} – ${data.endTime} WIB (${data.package.hours} Jam)</span></div>
-        <div class="row"><span class="label">Paket Photobooth : </span><span class="value">${data.package.name}</span></div>
-        <div class="row"><span class="label">Lokasi / Venue : </span><span class="value">${data.location}</span></div>
-        <div class="row"><span class="label">Nama / Jenis Acara : </span><span class="value">${data.eventName || data.eventType || 'Event Photobooth'}</span></div>
-        <div class="row"><span class="label">Add-on Terpilih : </span><span class="value">${addonList}</span></div>
-        <div class="row total-row"><span class="label">Total Pembayaran : </span><span class="value">${formattedTotal}</span></div>
+        <div class="row"><span class="label">Kode Booking : </span><span class="value"> ${data.code}</span></div>
+        <div class="row"><span class="label">Nama Pemesan : </span><span class="value"> ${data.customerName}</span></div>
+        <div class="row"><span class="label">Nomor WhatsApp : </span><span class="value"> ${data.whatsapp}</span></div>
+        <div class="row"><span class="label">Tanggal Acara : </span><span class="value"> ${formattedDate}</span></div>
+        <div class="row"><span class="label">Waktu Layanan : </span><span class="value"> ${data.startTime} –  ${data.endTime} WIB ( ${data.package.hours} Jam)</span></div>
+        <div class="row"><span class="label">Paket Photobooth : </span><span class="value"> ${data.package.name}</span></div>
+        <div class="row"><span class="label">Lokasi / Venue : </span><span class="value"> ${data.location}</span></div>
+        <div class="row"><span class="label">Nama / Jenis Acara : </span><span class="value"> ${data.eventName || data.eventType || 'Event Photobooth'}</span></div>
+        <div class="row"><span class="label">Add-on Terpilih : </span><span class="value"> ${addonList}</span></div>
+        <div class="row total-row"><span class="label">Total Pembayaran : </span><span class="value"> ${formattedTotal}</span></div>
       </div>
 
-      ${data.adminNote ? `
+       ${data.adminNote ? `
       <div class="note-box">
         <b>Catatan dari Admin:</b><br />
-        ${data.adminNote}
+         ${data.adminNote}
       </div>` : ''}
 
       <div class="card" style="background-color: #fffbeb; border-color: #fef3c7;">

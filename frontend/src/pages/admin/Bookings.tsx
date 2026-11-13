@@ -320,7 +320,7 @@ export function Detail() {
   )
   const closed = b.status === 'dibatalkan' || b.status === 'selesai'
   const close = () => { setDlg(null); setReason(''); setAdminNote('') }
-  const wa = 'https://wa.me/' + b.wa.replace(/\D/g, '')
+  const wa = 'https://wa.me/' + b.wa.replace(/\D/g, '').replace(/^0/, '62');
 
   const handleAccPayment = async () => {
     setLoading(true)
@@ -465,9 +465,9 @@ export function Detail() {
             <div className="flex flex-col gap-2">
               {b.pay === 'Bukti Diunggah' ? (
                 <>
-                  <Btn v="primary" icon="check" full onClick={() => setDlg('konfirmasi')}>
+                  {/* <Btn v="primary" icon="check" full onClick={() => setDlg('konfirmasi')}>
                     ACC & Konfirmasi Lunas
-                  </Btn>
+                  </Btn> */}
                   <Btn v="dangerOutline" icon="x" full onClick={() => setDlg('reject')}>
                     Tolak Bukti Pembayaran
                   </Btn>
