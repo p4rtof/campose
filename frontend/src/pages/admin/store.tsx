@@ -3,7 +3,7 @@ import { io as socketIO, Socket } from 'socket.io-client'
 import { useNav } from './router'
 import { cx, Icon } from './ui'
 
-export const BASE_URL = 'http://localhost:4000'
+export const BASE_URL = import.meta.env.VITE_API_URL || 'https://campose-production-0a2aea92.up.railway.app/api/v1';
 export const API = `${BASE_URL}/api/v1/admin`
 
 export type Status = 'menunggu' | 'terkonfirmasi' | 'dibatalkan' | 'selesai' | 'reschedule'

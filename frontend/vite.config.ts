@@ -8,6 +8,6 @@ export default defineConfig({
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
   server: {
     port: 5173,
-    proxy: { '/api': 'http://localhost:4000' },
+    proxy: { '/api': 'https://campose-production-0a2aea92.up.railway.app' },
   },
 })

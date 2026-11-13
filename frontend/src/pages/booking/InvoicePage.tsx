@@ -47,7 +47,8 @@ export function InvoicePage() {
     }
     ;(async () => {
       try {
-        const res = await fetch(`http://localhost:4000/api/v1/bookings/${code}`)
+        const res = await fetch(`https://campose-production-0a2aea92.up.railway.app/api/v1/bookings/${code}`)
+        // https://campose-production-0a2aea92.up.railway.app
         if (!res.ok) {
           const d = await res.json().catch(() => ({}))
           setError(d.error?.message || `HTTP ${res.status}`)

@@ -17,7 +17,7 @@ import { DAYS, MONTHS, dateLabel, endTime, fmt } from '@/lib/format'
 import { occ } from '@/lib/image'
 import { Link, navigate } from '@/lib/router'
 
-const BASE_URL = 'http://localhost:4000'
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://campose-production-0a2aea92.up.railway.app/api/v1';
 
 export function VoucherBox() {
   return null
