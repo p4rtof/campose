@@ -4,22 +4,22 @@ import { sendInvoiceEmail } from './email.service.js'
 
 type Method = 'QRIS' | 'VA_BCA' | 'VA_BNI' | 'VA_BRI' | 'VA_MANDIRI' | 'TRANSFER_MANUAL'
 
-// 1. Membuat data pembayaran baru (Status awal: MENUNGGU_VERIFIKASI atau PENDING)
 export async function createPayment(code: string, method: Method, paymentProofUrl?: string) {
   const b = await prisma.booking.findUnique({ where: { code } })
   if (!b) throw new AppError(404, 'NOT_FOUND', 'Booking tidak ditemukan')
   if (b.status !== 'MENUNGGU_PEMBAYARAN') throw new AppError(409, 'SLOT_TAKEN', 'Booking ini tidak menunggu pembayaran')
   if (b.paymentDeadline < new Date()) throw new AppError(409, 'SLOT_TAKEN', 'Batas waktu pembayaran sudah lewat')
 
-  // Simpan data pembayaran ke database
+  // Menyimpan data pembayaran dengan kolom yang sesuai dengan schema Prisma kamu
   const payment = await prisma.payment.create({
     data: { 
       bookingId: b.id, 
       method, 
       amount: b.total, 
       expiresAt: b.paymentDeadline,
-      status: 'PENDING', // Atau status menunggumu
-      proofUrl: paymentProofUrl || null
+      status: 'PENDING',
+      paymentProofUrl: paymentProofUrl || null,
+      uploadedAt: paymentProofUrl ? new Date() : null
     },
   })
 
@@ -32,15 +32,19 @@ export async function getPayment(id: string) {
   return p
 }
 
-// 2. Mark Paid dipanggil oleh Admin saat memverifikasi bukti bayar manual
-export async function markPaid(id: string) {
+// Dipanggil oleh Admin saat memverifikasi bukti bayar manual
+export async function markPaid(id: string, adminNote?: string) {
   const p = await getPayment(id)
   if (p.status === 'PAID') return p
   
   return prisma.$transaction(async (tx) => {
     const paid = await tx.payment.update({ 
       where: { id }, 
-      data: { status: 'PAID', paidAt: new Date() } 
+      data: { 
+        status: 'PAID', 
+        paidAt: new Date(),
+        adminNote: adminNote || 'Pembayaran telah diverifikasi oleh admin' 
+      } 
     })
     
     const b = await tx.booking.update({ 
@@ -55,7 +59,7 @@ export async function markPaid(id: string) {
       })
     }
     
-    // Kirim email notifikasi ke pelanggan bahwa pembayaran sudah dikonfirmasi admin
+    // Kirim email notifikasi otomatis ke pelanggan
     sendInvoiceEmail(b.email, b.customerName, b.code).catch(console.error);
 
     return paid
