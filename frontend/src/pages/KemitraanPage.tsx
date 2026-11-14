@@ -77,7 +77,7 @@ export function KemitraanPage() {
 
     setLoading(true)
     try {
-      await api.post('/kemitraan', form)
+      await api.post('/api/v1/kemitraan', form)
       setSent(true)
     } catch (err) {
       setServerError(apiErrorMessage(err))

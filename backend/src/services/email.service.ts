@@ -339,10 +339,10 @@ export async function sendPartnershipEmail(data: PartnershipEmailData) {
 
       <div class="card">
         <div class="card-title">📋 Data Calon Mitra</div>
-        <div class="row"><span class="label">Nama Lengkap</span><span class="value">${data.nama}</span></div>
-        <div class="row"><span class="label">Email</span><span class="value">${data.email}</span></div>
-        <div class="row"><span class="label">Nomor WhatsApp</span><span class="value">${data.no_wa}</span></div>
-        <div class="row"><span class="label">Jenis Pengajuan</span><span class="value">${data.jenis}</span></div>
+        <div class="row"><span class="label">Nama Lengkap : </span><span class="value"> ${data.nama}</span></div>
+        <div class="row"><span class="label">Email : </span><span class="value"> ${data.email}</span></div>
+        <div class="row"><span class="label">Nomor WhatsApp : </span><span class="value"> ${data.no_wa}</span></div>
+        <div class="row"><span class="label">Jenis Pengajuan : </span><span class="value"> ${data.jenis}</span></div>
       </div>
 
       <div class="card">
