@@ -233,7 +233,7 @@ campose/
 ### Admin Routes (JWT Auth Required)
 
 **Authentication:**
-- `POST /api/v1/admin/auth/login` – Admin login
+- `POST  ` – Admin login
 
 **Dashboard & Bookings:**
 - `GET /api/v1/admin/stats` – Dashboard statistics

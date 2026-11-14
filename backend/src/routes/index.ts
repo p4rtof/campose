@@ -16,6 +16,7 @@ import {
   checkBookingPaymentStatus,
   getPaymentById,
 } from '../services/payment-manual.service.js'
+import { sendPartnershipEmail } from '../services/email.service.js'
 
 export const routes = Router()
 
@@ -158,3 +159,15 @@ routes.get('/chat/sessions/:sessionId', wrap(async (req, res) => {
 routes.post('/partnership-leads', validate(S.leadBody), wrap(async (req, res) => {
   res.status(201).json(ok(await prisma.partnershipLead.create({ data: req.body })))
 }))
+
+// ── Kemitraan / Partnership ──
+routes.post('/kemitraan', validate(S.kemitraanBody), wrap(async (req, res) => {
+  const { nama, email, no_wa, jenis, pesan } = req.body
+  const result = await sendPartnershipEmail({ nama, email, no_wa, jenis, pesan })
+  if (!result.success) {
+    throw new AppError(500, 'EMAIL_FAILED', 'Gagal mengirim email pengajuan. Coba lagi sebentar.')
+  }
+  res.status(200).json(ok({ message: 'Pengajuan berhasil dikirim. Tim kami akan menghubungi kamu dalam 1-2 hari kerja.' }))
+}))
+
+  

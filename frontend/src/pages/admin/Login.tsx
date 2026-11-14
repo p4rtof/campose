@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { A } from './router'
 import { Btn, cx, Field, Icon, Input, Logo } from './ui'
 import { API } from './store'
 
@@ -37,11 +36,9 @@ function Strip() {
   )
 }
 
-export default function Login({ onLogin, forgot }: { onLogin: (token: string, admin: any) => void; forgot?: boolean }) {
-  const [sent, setSent] = useState(false)
-  const view = forgot ? (sent ? 'sent' : 'forgot') : 'login'
-  const [email, setEmail] = useState('admin@campose.id')
-  const [pw, setPw] = useState('admin123')
+export default function Login({ onLogin }: { onLogin: (token: string, admin: any) => void }) {
+  const [email, setEmail] = useState('')
+  const [pw, setPw] = useState('')
   const [show, setShow] = useState(false)
   const [err, setErr] = useState('')
   const [load, setLoad] = useState(false)
@@ -99,8 +96,7 @@ export default function Login({ onLogin, forgot }: { onLogin: (token: string, ad
 
       <section className="flex flex-1 items-center justify-center bg-white px-6 py-10">
         <div className="w-full max-w-sm">
-          {view === 'login' && (
-            <form onSubmit={submit} className="space-y-5">
+            <form onSubmit={submit} autoComplete="off" className="space-y-5">
               <div>
                 <h2 className="text-2xl font-bold">Selamat datang kembali</h2>
                 <p className="mt-1 text-sm text-slate-500">Masuk untuk membuka dashboard admin realtime.</p>
@@ -117,9 +113,10 @@ export default function Login({ onLogin, forgot }: { onLogin: (token: string, ad
                 <Input
                   type="email"
                   required
+                  autoComplete="off"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@campose.id"
+                  placeholder="Masukkan email"
                   className={cx(err && 'border-red-400')}
                 />
               </Field>
@@ -129,6 +126,7 @@ export default function Login({ onLogin, forgot }: { onLogin: (token: string, ad
                   <Input
                     type={show ? 'text' : 'password'}
                     required
+                    autoComplete="new-password"
                     value={pw}
                     onChange={(e) => setPw(e.target.value)}
                     placeholder="Masukkan password"
@@ -145,68 +143,10 @@ export default function Login({ onLogin, forgot }: { onLogin: (token: string, ad
                 </div>
               </Field>
 
-              <div className="flex items-center justify-between text-sm">
-                <label className="flex min-h-11 items-center gap-2 cursor-pointer">
-                  <input type="checkbox" defaultChecked className="size-4 accent-brand cursor-pointer" />
-                  Ingat saya
-                </label>
-                <A to="/admin/lupa-password" className="font-medium text-brand hover:underline">
-                  Lupa password?
-                </A>
-              </div>
-
               <Btn type="submit" v="primary" full loading={load}>
                 {load ? 'Memproses...' : 'Masuk ke Dashboard'}
               </Btn>
-
-              <div className="rounded-xl bg-canvas p-3.5 text-xs text-slate-600 border border-slate-200 flex flex-col gap-1">
-                <span className="font-semibold text-ink">Akun Bawaan:</span>
-                <span>Email: <b className="text-brand">admin@campose.id</b></span>
-                <span>Password: <b className="text-brand">admin123</b></span>
-              </div>
             </form>
-          )}
-
-          {view === 'forgot' && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                setSent(true)
-              }}
-              className="space-y-5"
-            >
-              <A to="/admin" className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-slate-600">
-                <Icon n="chevL" s={16} />Kembali masuk
-              </A>
-              <div>
-                <h2 className="text-2xl font-bold">Lupa password?</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Masukkan email admin. Password bawaan untuk pengujian adalah <b>admin123</b>.
-                </p>
-              </div>
-              <Field label="Email">
-                <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-              </Field>
-              <Btn type="submit" v="primary" full>
-                Kirim Link Reset
-              </Btn>
-            </form>
-          )}
-
-          {view === 'sent' && (
-            <div className="space-y-5 text-center">
-              <div className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-100 text-emerald-600">
-                <Icon n="mail" s={30} />
-              </div>
-              <h2 className="text-2xl font-bold">Link reset terkirim</h2>
-              <p className="text-sm text-slate-500">
-                Cek kotak masuk <b className="text-ink">{email}</b>.
-              </p>
-              <Btn v="primary" full to="/admin">
-                Kembali ke Halaman Masuk
-              </Btn>
-            </div>
-          )}
         </div>
       </section>
     </div>

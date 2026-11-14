@@ -380,7 +380,7 @@ export default function AdminApp() {
   return (
     <NavCtx.Provider value={{ loc, navigate }}>
       {!auth || isPublic ? (
-        <Login onLogin={login} forgot={path === '/admin/lupa-password'} />
+        <Login onLogin={login} />
       ) : (
         <Provider>
           <Shell onLogout={logout} />

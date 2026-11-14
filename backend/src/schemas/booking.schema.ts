@@ -41,3 +41,11 @@ export const leadBody = z.object({
   city: z.string().optional(),
   message: z.string().max(1000).optional(),
 })
+
+export const kemitraanBody = z.object({
+  nama: z.string().min(2, 'Nama minimal 2 karakter'),
+  email: z.string().email('Format email tidak valid'),
+  no_wa: z.string().regex(/^08\d{8,13}$/, 'Nomor WhatsApp harus diawali 08, contoh: 081234567890'),
+  jenis: z.enum(['Kemitraan', 'Sponsorship', 'Kolaborasi'], { errorMap: () => ({ message: 'Jenis pengajuan tidak valid' }) }),
+  pesan: z.string().min(10, 'Pesan minimal 10 karakter').max(2000),
+})

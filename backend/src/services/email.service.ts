@@ -284,6 +284,101 @@ export async function sendBookingRejectedEmail(data: BookingEmailData, reason?: 
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Kemitraan / Partnership notification
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PartnershipEmailData {
+  nama: string
+  email: string
+  no_wa: string
+  jenis: string
+  pesan: string
+}
+
+/**
+ * Kirim notifikasi pengajuan kemitraan ke email admin (fadhla153@gmail.com)
+ */
+export async function sendPartnershipEmail(data: PartnershipEmailData) {
+  const html = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pengajuan Kemitraan Baru – Campose</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f6f8fb; margin: 0; padding: 24px; color: #1e293b; }
+    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .header { background: linear-gradient(135deg, #1A76D2 0%, #0D47A1 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
+    .header h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+    .header p { margin: 8px 0 0; font-size: 14px; opacity: 0.9; }
+    .badge { display: inline-block; background-color: #fbbf24; color: #78350f; padding: 6px 16px; border-radius: 9999px; font-size: 13px; font-weight: 700; margin-top: 14px; }
+    .body { padding: 32px 24px; }
+    .intro { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 24px; }
+    .card { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+    .card-title { font-size: 15px; font-weight: 700; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 14px; }
+    .row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 13px; gap: 12px; }
+    .row .label { color: #64748b; font-weight: 500; white-space: nowrap; }
+    .row .value { color: #0f172a; font-weight: 600; text-align: right; }
+    .pesan-box { background-color: #eff6ff; border-left: 4px solid #1a76d2; padding: 14px 16px; border-radius: 6px; font-size: 13px; color: #1e3a5f; line-height: 1.6; white-space: pre-wrap; }
+    .footer { background-color: #f1f5f9; padding: 20px 24px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>CAMPOSE PHOTOBOOTH</h1>
+      <p>Instant Memories, Endless Fun</p>
+      <div class="badge">🤝 Pengajuan Kemitraan Baru</div>
+    </div>
+    <div class="body">
+      <p class="intro">
+        Halo Admin! Ada pengajuan <b>${data.jenis}</b> baru yang masuk melalui halaman Kemitraan Campose. Berikut detail calon mitra:
+      </p>
+
+      <div class="card">
+        <div class="card-title">📋 Data Calon Mitra</div>
+        <div class="row"><span class="label">Nama Lengkap</span><span class="value">${data.nama}</span></div>
+        <div class="row"><span class="label">Email</span><span class="value">${data.email}</span></div>
+        <div class="row"><span class="label">Nomor WhatsApp</span><span class="value">${data.no_wa}</span></div>
+        <div class="row"><span class="label">Jenis Pengajuan</span><span class="value">${data.jenis}</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">💬 Pesan / Alasan Pengajuan</div>
+        <div class="pesan-box">${data.pesan}</div>
+      </div>
+
+      <p style="font-size: 13px; color: #64748b; line-height: 1.6;">
+        Segera tindak lanjuti pengajuan ini dengan menghubungi calon mitra via WhatsApp atau email di atas dalam <b>1–2 hari kerja</b>.
+      </p>
+    </div>
+    <div class="footer">
+      <p><b>Campose Photobooth Admin System</b><br/>Notifikasi otomatis dari sistem kemitraan</p>
+      <p style="margin-top: 6px; color: #94a3b8;">Email ini dikirim karena ada pengajuan baru di campose.id/kemitraan</p>
+    </div>
+  </div>
+</body>
+</html>
+  `
+
+  try {
+    const info = await transporter.sendMail({
+      from: DEFAULT_FROM,
+      to: 'fadhla153@gmail.com',
+      replyTo: data.email,
+      subject: `[Campose] Pengajuan ${data.jenis} Baru dari ${data.nama}`,
+      html,
+    })
+    console.log(`Email kemitraan terkirim ke campose.indonesia@gmail.com dari ${data.email}. MessageId:`, info.messageId || 'local-json')
+    return { success: true, info }
+  } catch (err) {
+    console.error(`Gagal mengirim email kemitraan:`, err)
+    return { success: false, error: err }
+  }
+}
+
 export const sendInvoiceEmail = async (email: string, nama: string, orderId: string) => {
   await transporter.sendMail({
     from: DEFAULT_FROM,
