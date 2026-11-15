@@ -17,7 +17,7 @@ import { DAYS, MONTHS, dateLabel, endTime, fmt } from '@/lib/format'
 import { occ } from '@/lib/image'
 import { Link, navigate } from '@/lib/router'
 
-const BASE_URL = import.meta.env.VITE_API_URL ';
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 export function VoucherBox() {
   return null
