@@ -6,6 +6,8 @@ import { FlowSteps } from '@/features/booking/FlowSteps'
 import { fmt } from '@/lib/format'
 import { navigate } from '@/lib/router'
 
+const BASE_URL = import.meta.env.VITE_API_URL;
+
 /* ── helpers ──────────────────────────────────────────────────── */
 
 const fmtDate = (iso: string | undefined) =>
@@ -47,7 +49,7 @@ export function InvoicePage() {
     }
     ;(async () => {
       try {
-        const res = await fetch(`https://172.197.248.30.sslip.io/api/v1/bookings/${code}`)
+        const res = await fetch(`${BASE_URL}/api/v1/bookings/${code}`)
         if (!res.ok) {
           const d = await res.json().catch(() => ({}))
           setError(d.error?.message || `HTTP ${res.status}`)
