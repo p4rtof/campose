@@ -80,7 +80,6 @@ app.use(
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-// Endpoint Health Check (memudahkan pengecekan saat di-deploy ke Render/Railway)
 app.get('/api/v1/health', (_req, res) => {
   res.status(200).json({
     status: 'success',

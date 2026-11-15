@@ -35,7 +35,7 @@ export default function App() {
     if (path.startsWith('/admin')) {
       document.title = 'Campose Admin — Dashboard Manajemen Realtime'
     } else {
-      document.title = 'Campose — Event Photobooth Rental'
+      document.title = 'Campose | Self-Service Photobox & Event Photobooth'
     }
   }, [path])
 
