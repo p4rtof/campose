@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js'
 import { AppError } from '../lib/errors.js'
+import { sendAdminPaymentNotificationEmail } from './email.service.js'
 
 type Method = 'QRIS' | 'VA_BCA' | 'VA_BNI' | 'VA_BRI' | 'VA_MANDIRI' | 'TRANSFER_MANUAL'
 
@@ -41,11 +42,14 @@ export async function uploadPaymentProof(
   const db = prisma as any
   const p = await db.payment.findUnique({
     where: { id: paymentId },
-    include: { booking: { include: { package: true } } },
+    include: { booking: { include: { package: true, addons: { include: { addon: true } } } } },
   })
   if (!p) throw new AppError(404, 'NOT_FOUND', 'Pembayaran tidak ditemukan')
   if (!['PENDING', 'DITOLAK'].includes(p.status))
     throw new AppError(409, 'CONFLICT', 'Tidak bisa upload bukti untuk pembayaran ini')
+
+  // Tandai apakah ini re-upload setelah ditolak
+  const isReupload = p.status === 'DITOLAK'
 
   const updated = await db.payment.update({
     where: { id: paymentId },
@@ -54,10 +58,10 @@ export async function uploadPaymentProof(
       paymentProofUrl: proofUrl,
       uploadedAt: new Date(),
     },
-    include: { booking: { include: { package: true } } },
+    include: { booking: { include: { package: true, addons: { include: { addon: true } } } } },
   })
 
-  // Notifikasi realtime ke admin
+  // Notifikasi realtime ke admin via Socket.IO
   if (emitEvent) {
     emitEvent('payment:proof_uploaded', {
       paymentId: updated.id,
@@ -68,6 +72,29 @@ export async function uploadPaymentProof(
       proofUrl,
     })
   }
+
+  // Kirim email notifikasi ke admin — fire-and-forget (pola sama seperti admin.service.ts)
+  sendAdminPaymentNotificationEmail({
+    code: updated.booking.code,
+    customerName: updated.booking.customerName,
+    email: updated.booking.email,
+    whatsapp: updated.booking.whatsapp,
+    packageName: updated.booking.package.name,
+    addons: updated.booking.addons?.map((a: any) => ({
+      name: a.addon?.name || 'Add-on',
+      qty: a.qty,
+      price: a.price,
+    })) ?? [],
+    eventDate: updated.booking.eventDate,
+    startTime: updated.booking.startTime,
+    endTime: updated.booking.endTime,
+    location: updated.booking.location,
+    method: updated.method,
+    total: updated.booking.total,
+    proofUrl,
+    isReupload,
+    uploadedAt: updated.uploadedAt ?? new Date(),
+  }).catch((err) => console.error('Gagal mengirim email notifikasi admin:', err))
 
   return updated
 }
