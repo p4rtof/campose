@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { wrap } from '../lib/wrap.js'
-import { ok } from '../lib/errors.js'
+import { ok, AppError } from '../lib/errors.js'
 import { adminAuth } from '../middlewares/adminAuth.js'
 import {
   adminLogin,
@@ -423,6 +423,21 @@ adminRoutes.put('/terms', wrap(async (req, res) => {
 }))
 
 // ── Admin Users Management ──
+adminRoutes.get('/auth/me', wrap(async (req, res) => {
+  const admin = (req as any).admin
+  if (!admin) {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } })
+  }
+  const user = await prisma.adminUser.findUnique({
+    where: { id: admin.adminId },
+    select: { id: true, name: true, email: true, role: true },
+  })
+  if (!user) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Admin tidak ditemukan' } })
+  }
+  res.json(ok(user))
+}))
+
 adminRoutes.get('/users', wrap(async (_req, res) => {
   const users = await prisma.adminUser.findMany({
     select: { id: true, name: true, email: true, role: true, createdAt: true },
@@ -431,14 +446,64 @@ adminRoutes.get('/users', wrap(async (_req, res) => {
   res.json(ok(users))
 }))
 
+adminRoutes.delete('/users/:id', wrap(async (req, res) => {
+  const currentAdmin = (req as any).admin
+  
+  if (!currentAdmin || !currentAdmin.adminId) {
+    throw new AppError(401, 'UNAUTHORIZED', 'Unauthorized')
+  }
+  
+  if (currentAdmin.role !== 'OWNER') {
+    throw new AppError(403, 'FORBIDDEN', 'Hanya Owner yang dapat mengelola akun admin')
+  }
+
+  const userId = Number(req.params.id)
+  
+  if (currentAdmin.adminId === userId) {
+    return res.status(400).json({ success: false, error: { code: 'CONFLICT', message: 'Tidak dapat menghapus akun yang sedang digunakan' } })
+  }
+  
+  const targetUser = await prisma.adminUser.findUnique({ where: { id: userId } })
+  if (!targetUser) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Admin tidak ditemukan' } })
+  }
+  
+  if (targetUser.role === 'OWNER') {
+    const ownerCount = await prisma.adminUser.count({ where: { role: 'OWNER' } })
+    if (ownerCount <= 1) {
+      return res.status(400).json({ success: false, error: { code: 'CONFLICT', message: 'Tidak dapat menghapus OWNER terakhir' } })
+    }
+  }
+  
+  await prisma.adminUser.delete({ where: { id: userId } })
+  res.json(ok({ deleted: true }))
+}))
+
 adminRoutes.post('/users', wrap(async (req, res) => {
+  const currentAdmin = (req as any).admin
+  if (!currentAdmin || currentAdmin.role !== 'OWNER') {
+    throw new AppError(403, 'FORBIDDEN', 'Hanya Owner yang dapat mengelola akun admin')
+  }
+
   const { name, email, password, role } = req.body
+  if (!name || !email) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Nama dan email diperlukan' } })
+  }
+  const normalizedEmail = email.toLowerCase().trim()
+  const existing = await prisma.adminUser.findUnique({ where: { email: normalizedEmail } })
+  if (existing) {
+    return res.status(409).json({ success: false, error: { code: 'CONFLICT', message: 'Email sudah terdaftar sebagai akun admin' } })
+  }
+  const validRoles = ['OWNER', 'ADMIN', 'CS']
+  if (role && !validRoles.includes(role)) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Role tidak valid' } })
+  }
   const bcrypt = await import('bcryptjs')
   const passwordHash = await bcrypt.default.hash(password || 'admin123', 12)
   const user = await prisma.adminUser.create({
     data: {
       name,
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
       passwordHash,
       role: role || 'ADMIN',
     },

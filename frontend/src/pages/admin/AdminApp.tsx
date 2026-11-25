@@ -46,13 +46,17 @@ function NotFound() {
   )
 }
 
-function Shell({ onLogout }: { onLogout: () => void }) {
+function Shell({ onLogout, adminUser }: { onLogout: () => void; adminUser: { id: number; name: string; email: string; role: string } | null }) {
   const { route, go, bookings, setQ, q } = useApp()
   const { navigate } = useNav()
   const [drawer, setDrawer] = useState(false)
   const [prof, setProf] = useState(false)
   const [notif, setNotif] = useState(false)
   const [more, setMore] = useState(false)
+
+  const displayName = adminUser?.name || 'Admin Campose'
+  const displayRole = adminUser?.role || 'Administrator'
+  const displayInitial = displayName[0]?.toUpperCase() || 'A'
 
   const cur = group(route.p)
   const closeAll = () => {
@@ -223,12 +227,12 @@ function Shell({ onLogout }: { onLogout: () => void }) {
               className="flex min-h-11 items-center gap-2 rounded-xl px-1.5 hover:bg-slate-100 cursor-pointer"
             >
               <span className="grid size-9 place-items-center rounded-full bg-brand text-sm font-semibold text-white">
-                A
+                {displayInitial}
               </span>
               <span className="hidden text-left text-sm leading-tight lg:block">
-                <b>Admin Campose</b>
+                <b>{displayName}</b>
                 <br />
-                <span className="text-xs text-slate-500">Administrator</span>
+                <span className="text-xs text-slate-500">{displayRole}</span>
               </span>
               <Icon n="chevD" s={16} className="hidden lg:block text-slate-400" />
             </button>
@@ -343,9 +347,19 @@ const clean = (p: string) => p.replace(/\/+$/, '') || '/admin'
 
 export default function AdminApp() {
   const [loc, setLoc] = useState(() => window.location.pathname + window.location.search)
-  const [auth, setAuth] = useState(() => {
-    return sessionStorage.getItem('campose-auth') === '1' || Boolean(localStorage.getItem('admin_token'))
+  const [token, setToken] = useState(() => {
+    return sessionStorage.getItem('campose-token') || localStorage.getItem('admin_token') || ''
   })
+  const [adminUser, setAdminUser] = useState<{ id: number; name: string; email: string; role: string } | null>(() => {
+    try {
+      const stored = sessionStorage.getItem('campose-admin') || localStorage.getItem('admin_user')
+      return stored ? JSON.parse(stored) : null
+    } catch {
+      return null
+    }
+  })
+
+  const auth = Boolean(token)
 
   const navigate = useCallback((to: string, replace?: boolean) => {
     if (to === window.location.pathname + window.location.search) return
@@ -363,17 +377,20 @@ export default function AdminApp() {
   const path = clean(loc.split('?')[0])
   const isPublic = PUBLIC.includes(path)
 
-  const login = () => {
-    sessionStorage.setItem('campose-auth', '1')
-    setAuth(true)
+  const login = (_tok: string, admin: any) => {
+    setToken(_tok)
+    setAdminUser(admin || null)
     navigate('/admin', true)
   }
 
   const logout = () => {
     sessionStorage.removeItem('campose-auth')
     sessionStorage.removeItem('campose-token')
+    sessionStorage.removeItem('campose-admin')
     localStorage.removeItem('admin_token')
-    setAuth(false)
+    localStorage.removeItem('admin_user')
+    setToken('')
+    setAdminUser(null)
     navigate('/admin/login')
   }
 
@@ -382,8 +399,8 @@ export default function AdminApp() {
       {!auth || isPublic ? (
         <Login onLogin={login} />
       ) : (
-        <Provider>
-          <Shell onLogout={logout} />
+        <Provider key={token}>
+          <Shell onLogout={logout} adminUser={adminUser} />
         </Provider>
       )}
     </NavCtx.Provider>

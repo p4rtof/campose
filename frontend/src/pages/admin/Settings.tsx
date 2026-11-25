@@ -25,9 +25,21 @@ export default function Settings() {
   const tab = route.tab ?? 'paket'
   const token = typeof window !== 'undefined' ? (sessionStorage.getItem('campose-token') || localStorage.getItem('admin_token') || '') : ''
 
+  const currentAdmin = (() => {
+    try {
+      const stored = sessionStorage.getItem('campose-admin') || localStorage.getItem('admin_user')
+      return stored ? JSON.parse(stored) : null
+    } catch {
+      return null
+    }
+  })()
+
+  const isOwner = currentAdmin?.role === 'OWNER'
+
   // Admin users state
   const [admins, setAdmins] = useState<{ id: number; name: string; email: string; role: string }[]>([])
   const [addAdm, setAddAdm] = useState(false)
+  const [adminErr, setAdminErr] = useState('')
   const [na, setNa] = useState({ n: '', e: '', p: '', r: 'ADMIN' })
 
   // Packages state
@@ -201,30 +213,57 @@ export default function Settings() {
   const handleCreateAdmin = async () => {
     if (!na.n || !na.e) return
     setLoading(true)
+    setAdminErr('')
     try {
       const res = await fetch(`${API}/users`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: na.n,
-          email: na.e,
+          name: na.n.trim(),
+          email: na.e.trim(),
           password: na.p || 'admin123',
           role: na.r,
         }),
       })
       const data = await res.json()
-      if (res.ok) {
+      if (res.ok && data.data) {
         setAdmins((prev) => [data.data, ...prev])
         toast(`Admin ${na.n} berhasil ditambahkan! Password default: admin123`, 'ok')
         setAddAdm(false)
         setNa({ n: '', e: '', p: '', r: 'ADMIN' })
       } else {
-        toast(data.error?.message || 'Gagal menambahkan admin', 'err')
+        const errMsg = data.error?.message || 'Gagal menambahkan admin'
+        setAdminErr(errMsg)
+        toast(errMsg, 'err')
       }
     } catch {
+      setAdminErr('Terjadi kesalahan koneksi')
       toast('Terjadi kesalahan', 'err')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDeleteAdmin = async (id: number, name: string) => {
+    if (currentAdmin && currentAdmin.id === id) {
+      toast('Tidak dapat menghapus akun yang sedang aktif digunakan', 'err')
+      return
+    }
+    if (!confirm(`Hapus akun admin ${name}?`)) return
+    try {
+      const res = await fetch(`${API}/users/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setAdmins((prev) => prev.filter((u) => u.id !== id))
+        toast(`Akun admin ${name} berhasil dihapus`, 'ok')
+      } else {
+        toast(data.error?.message || 'Gagal menghapus admin', 'err')
+      }
+    } catch {
+      toast('Terjadi kesalahan koneksi', 'err')
     }
   }
 
@@ -417,34 +456,68 @@ export default function Settings() {
                 <h2 className="font-semibold text-base">Akun Administrator</h2>
                 <p className="text-xs text-slate-500">Daftar pengguna dengan akses ke dashboard ini</p>
               </div>
-              <Btn icon="plus" onClick={() => setAddAdm(true)}>
-                Tambah Admin
-              </Btn>
+              {isOwner && (
+                <Btn icon="plus" onClick={() => { setAdminErr(''); setAddAdm(true) }}>
+                  Tambah Admin
+                </Btn>
+              )}
             </div>
+
+            {!isOwner && (
+              <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200/80 px-3.5 py-2.5 text-xs text-amber-800">
+                <span className="font-medium">Hanya Owner yang dapat menambah atau menghapus akun admin.</span>
+              </div>
+            )}
 
             <div className="space-y-2">
               {admins.length === 0 ? (
                 <div className="p-4 text-center text-sm text-slate-400">Memuat daftar admin...</div>
               ) : (
-                admins.map((u) => (
-                  <div key={u.id} className="flex items-center gap-3 rounded-xl bg-canvas p-3">
-                    <span className="grid size-10 place-items-center rounded-full bg-brand text-sm font-semibold text-white">
-                      {u.name[0] || 'A'}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{u.name}</p>
-                      <p className="truncate text-xs text-slate-500">{u.email}</p>
-                    </div>
-                    <span
-                      className={cx(
-                        'rounded-full px-2.5 py-1 text-xs font-semibold',
-                        u.role === 'OWNER' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800',
+                admins.map((u) => {
+                  const isCurrent = currentAdmin && currentAdmin.id === u.id
+                  return (
+                    <div key={u.id} className="flex items-center gap-3 rounded-xl bg-canvas p-3">
+                      <span className="grid size-10 place-items-center rounded-full bg-brand text-sm font-semibold text-white">
+                        {u.name[0] || 'A'}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-medium">{u.name}</p>
+                          {isCurrent && (
+                            <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                              Anda
+                            </span>
+                          )}
+                        </div>
+                        <p className="truncate text-xs text-slate-500">{u.email}</p>
+                      </div>
+                      <span
+                        className={cx(
+                          'rounded-full px-2.5 py-1 text-xs font-semibold',
+                          u.role === 'OWNER' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800',
+                        )}
+                      >
+                        {u.role}
+                      </span>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          disabled={isCurrent}
+                          onClick={() => handleDeleteAdmin(u.id, u.name)}
+                          className={cx(
+                            'p-1.5 transition rounded-lg',
+                            isCurrent
+                              ? 'text-slate-300 cursor-not-allowed opacity-50'
+                              : 'text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer'
+                          )}
+                          title={isCurrent ? 'Tidak dapat menghapus akun Anda sendiri' : 'Hapus akun admin'}
+                        >
+                          ✕
+                        </button>
                       )}
-                    >
-                      {u.role}
-                    </span>
-                  </div>
-                ))
+                    </div>
+                  )
+                })
               )}
             </div>
           </div>
@@ -506,6 +579,11 @@ export default function Settings() {
         }
       >
         <div className="space-y-4">
+          {adminErr && (
+            <div className="p-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-xl">
+              {adminErr}
+            </div>
+          )}
           <Field label="Nama Lengkap">
             <Input value={na.n} onChange={(e) => setNa({ ...na, n: e.target.value })} placeholder="Contoh: Salsa Amelia" />
           </Field>
@@ -524,6 +602,7 @@ export default function Settings() {
             <Select value={na.r} onChange={(e) => setNa({ ...na, r: e.target.value })}>
               <option value="ADMIN">ADMIN</option>
               <option value="OWNER">OWNER</option>
+              <option value="CS">CS</option>
             </Select>
           </Field>
         </div>

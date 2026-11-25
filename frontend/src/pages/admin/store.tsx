@@ -241,6 +241,17 @@ export function Provider({ children }: { children: ReactNode }) {
     setTimeout(() => setT((x) => (x?.k === k ? null : x)), 3200)
   }, [])
 
+  const handleUnauthorized = useCallback(() => {
+    toast('Sesi login berakhir, silakan masuk kembali', 'err')
+    sessionStorage.setItem('campose-auth-error', 'Sesi login berakhir, silakan masuk kembali')
+    sessionStorage.removeItem('campose-auth')
+    sessionStorage.removeItem('campose-token')
+    sessionStorage.removeItem('campose-admin')
+    localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_user')
+    navigate('/admin/login')
+  }, [navigate, toast])
+
   // 1. Fetch bookings & data from real backend
   const refreshBookings = useCallback(async () => {
     if (!token) return
@@ -248,6 +259,10 @@ export function Provider({ children }: { children: ReactNode }) {
       const res = await fetch(`${API}/bookings?limit=100`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
       if (res.ok) {
         const data = await res.json()
         if (data.data?.items) {
@@ -259,6 +274,10 @@ export function Provider({ children }: { children: ReactNode }) {
       const statsRes = await fetch(`${API}/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (statsRes.status === 401) {
+        handleUnauthorized()
+        return
+      }
       if (statsRes.ok) {
         const sData = await statsRes.json()
         if (sData.data) setStats(sData.data)
@@ -266,7 +285,7 @@ export function Provider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.warn('Gagal memuat bookings dari backend:', err)
     }
-  }, [token])
+  }, [token, handleUnauthorized])
 
   // 2. Fetch vouchers
   const refreshVouchers = useCallback(async () => {
@@ -275,6 +294,10 @@ export function Provider({ children }: { children: ReactNode }) {
       const res = await fetch(`${API}/vouchers`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
       if (res.ok) {
         const data = await res.json()
         if (data.data) {
@@ -293,7 +316,7 @@ export function Provider({ children }: { children: ReactNode }) {
         }
       }
     } catch {}
-  }, [token])
+  }, [token, handleUnauthorized])
 
   // 3. Fetch availability
   const refreshAvailability = useCallback(async () => {
@@ -302,6 +325,10 @@ export function Provider({ children }: { children: ReactNode }) {
       const res = await fetch(`${API}/availability`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
       if (res.ok) {
         const data = await res.json()
         if (data.data) {
@@ -314,7 +341,7 @@ export function Provider({ children }: { children: ReactNode }) {
         }
       }
     } catch {}
-  }, [token])
+  }, [token, handleUnauthorized])
 
   useEffect(() => {
     refreshBookings()
@@ -399,6 +426,10 @@ export function Provider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ adminNote: adminNote || 'Disetujui oleh admin' }),
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return false
+      }
       const data = await res.json()
       if (res.ok) {
         toast(`✅ Pembayaran ${target.inv} berhasil di-ACC & Lunas!`, 'ok')
@@ -433,6 +464,10 @@ export function Provider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ adminNote: adminNote || 'Bukti tidak sesuai' }),
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return false
+      }
       const data = await res.json()
       if (res.ok) {
         toast(`❌ Bukti bayar ${target.inv} ditolak.`, 'err')
@@ -459,6 +494,10 @@ export function Provider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ date, startTime: start, endTime: end }),
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return false
+      }
       if (res.ok) {
         toast(`Jadwal ${inv} berhasil diubah ke ${fd(date)}`, 'ok')
         refreshBookings()
@@ -479,6 +518,10 @@ export function Provider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ reason }),
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return false
+      }
       if (res.ok) {
         toast(`Booking ${inv} berhasil dibatalkan.`, 'err')
         refreshBookings()
@@ -498,6 +541,10 @@ export function Provider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ status: 'SELESAI' }),
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return false
+      }
       if (res.ok) {
         toast(`Booking ${inv} ditandai selesai.`, 'ok')
         refreshBookings()
@@ -526,6 +573,10 @@ export function Provider({ children }: { children: ReactNode }) {
           eventName: b.event,
         }),
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
       if (res.ok) {
         toast('Booking manual berhasil disimpan ke database', 'ok')
         await refreshBookings()
@@ -551,7 +602,7 @@ export function Provider({ children }: { children: ReactNode }) {
     }
 
     try {
-      await fetch(`${API}/bookings/${target.inv}/status`, {
+      const res = await fetch(`${API}/bookings/${target.inv}/status`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -559,6 +610,10 @@ export function Provider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ status: dbStatusMap[s] }),
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
     } catch {}
 
     setB((list) =>
@@ -590,6 +645,10 @@ export function Provider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ date, status: dbStatus }),
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        throw new Error('Unauthorized')
+      }
       if (!res.ok) {
         const error = await res.json()
         throw new Error(error.error?.message || `HTTP ${res.status}`)

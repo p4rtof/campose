@@ -5,12 +5,13 @@ import bcrypt from 'bcryptjs'
 import { sendBookingConfirmedEmail, sendBookingRejectedEmail } from './email.service.js'
 
 export async function adminLogin(email: string, password: string) {
-  let admin = await prisma.adminUser.findUnique({ where: { email } })
+  const normalizedEmail = email.trim().toLowerCase()
+  let admin = await prisma.adminUser.findUnique({ where: { email: normalizedEmail } })
   
   // Jika database belum di-seed dan tabel AdminUser masih kosong, auto-create admin default
   if (!admin) {
     const totalAdmins = await prisma.adminUser.count()
-    if (totalAdmins === 0 && email.trim().toLowerCase() === 'admin@campose.id' && password === 'admin123') {
+    if (totalAdmins === 0 && normalizedEmail === 'admin@campose.id' && password === 'admin123') {
       const passwordHash = await bcrypt.hash('admin123', 12)
       admin = await prisma.adminUser.create({
         data: {

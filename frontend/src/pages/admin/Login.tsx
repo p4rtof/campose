@@ -40,7 +40,14 @@ export default function Login({ onLogin }: { onLogin: (token: string, admin: any
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [show, setShow] = useState(false)
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState(() => {
+    const msg = sessionStorage.getItem('campose-auth-error')
+    if (msg) {
+      sessionStorage.removeItem('campose-auth-error')
+      return msg
+    }
+    return ''
+  })
   const [load, setLoad] = useState(false)
 
   const submit = async (e: React.FormEvent) => {
@@ -60,6 +67,10 @@ export default function Login({ onLogin }: { onLogin: (token: string, admin: any
         sessionStorage.setItem('campose-auth', '1')
         sessionStorage.setItem('campose-token', data.data.token)
         localStorage.setItem('admin_token', data.data.token)
+        if (data.data.admin) {
+          localStorage.setItem('admin_user', JSON.stringify(data.data.admin))
+          sessionStorage.setItem('campose-admin', JSON.stringify(data.data.admin))
+        }
         onLogin(data.data.token, data.data.admin)
       } else {
         setErr(data.error?.message || 'Email atau password salah')
