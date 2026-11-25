@@ -1,10 +1,10 @@
 /** Aperture "o" cut from the official campose logo. */
 export function Aperture({ size = 28, light = false }: { size?: number; light?: boolean }) {
-  return <img src={light ? '/assets/icon-white.png' : '/assets/icon-blue.png'} width={size} height={size} alt="" style={{ display: 'inline-block' }} />
+  return <img src={light ? '/assets/icon-white.png' : '/assets/icon-blue.png'} width={size} height={size} alt="Campose Icon" style={{ display: 'inline-block' }} />
 }
 /** Official campose wordmark. `light` = white version (use on blue); default = blue version (use on white). */
 export function Logo({ light = false, size = 32 }: { light?: boolean; size?: number }) {
-  return <img src={light ? '/assets/logo-white.png' : '/assets/logo-blue.png'} alt="campose" style={{ height: size * 0.8, width: 'auto', display: 'block' }} />
+  return <img src={light ? '/assets/logo-white.png' : '/assets/logo-blue.png'} alt="Campose Photobooth" style={{ height: size * 0.8, width: 'auto', display: 'block' }} />
 }
 export function SilkWaves({ dark = false }: { dark?: boolean }) {
   const c = dark ? '#ffffff' : '#1A76D2'
