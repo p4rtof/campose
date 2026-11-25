@@ -1,428 +1,307 @@
-# Campose – Photobooth Booking Portal & Admin Management System
+# Campose
 
-**Campose** is a full-stack photobooth rental booking platform with real-time admin calendar management, dynamic pricing from database, automated booking confirmations, and payment processing. Built for the Asah 2026 capstone program (Team A26-CS263).
+Full-stack photobooth rental booking platform with realtime admin dashboard, database-driven pricing, calendar management, manual payment verification, and automated email notifications.
 
----
+| | URL |
+|---|---|
+| Customer site | [campose.web.id](https://campose.web.id) |
+| Admin dashboard | [campose.web.id/admin](https://campose.web.id/admin) |
+| Backend API | [api.campose.web.id/api/v1](https://api.campose.web.id/api/v1) |
 
-## Core Features
-
-### Customer Experience
-- **Dynamic Package & Add-on Pricing**: All pricing fetched from database at runtime; no hardcoded values.
-- **Real-time Booking Calendar**: Customers view available dates and time slots synchronized with admin overrides.
-- **Holiday/Blocked Date Management**: Admins mark dates as "Libur" (holiday); customers cannot select them.
-- **Complete Booking Flow**: Package selection → date/time → event details → add-ons → payment method.
-- **Automatic Confirmation Emails**: Booking confirmation and payment instructions sent via Nodemailer.
-
-### Admin Dashboard
-- **Calendar Availability Overrides**: Mark specific dates as Tersedia, Penuh, or Libur (TERSEDIA, PENUH, LIBUR).
-- **Booking Management**: View all bookings, reschedule, cancel, manage payment confirmations.
-- **Manual Payment Verification**: Upload payment proofs, admin confirms or rejects manually.
-- **Real-time Socket.IO Sync**: Changes propagate instantly to all connected clients (customers & admins).
-
-### Backend Architecture
-- **Database-Driven Catalog**: Packages, add-ons, vouchers, availability overrides all managed in PostgreSQL (Supabase).
-- **Booking Validation**: Backend validates package availability, blocked dates, pricing at submission time.
-- **JWT Authentication**: Secure admin routes with token-based auth.
-- **Email Notifications**: Nodemailer integration for confirmations and payment reminders.
+Built for the Asah 2026 capstone program — Team A26-CS263.
 
 ---
 
-## 🛠 Tech Stack
-
-### Frontend
-- **React 19** + **Vite 8** – Fast build tooling and HMR
-- **TypeScript 5** – Type safety
-- **Tailwind CSS 4** – Utility-first styling
-- **Socket.IO Client 4** – Real-time updates
-- **Axios** – HTTP client (optional)
-
-### Backend
-- **Express 4** + **TypeScript 5** – RESTful API
-- **Prisma 6** – ORM for PostgreSQL
-- **PostgreSQL (Supabase)** – Managed database
-- **Socket.IO 4** – Real-time event broadcasting
-- **JWT (jsonwebtoken)** – Admin authentication
-- **Bcryptjs** – Password hashing
-- **Nodemailer 10** – Email notifications
-- **Helmet** – Security headers
-- **CORS** – Cross-origin request handling
-- **Zod** – Schema validation
-- **Multer** – File upload middleware
-
-### Development
-- **tsx** – TypeScript runner for Node.js
-- **Concurrently** – Run frontend + backend in parallel
-- **Prisma Migrate** – Schema versioning (optional; using db push for development)
-
----
-
-## Getting Started
-
-### Prerequisites
-- **Node.js** 18+ with npm
-- **PostgreSQL** database (Supabase recommended for quick setup)
-- **Git**
-
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd campose
-   ```
-
-2. **Install dependencies (all packages):**
-   ```bash
-   npm run setup
-   ```
-   Or manually:
-   ```bash
-   npm install
-   npm install --prefix frontend
-   npm install --prefix backend
-   ```
-
-3. **Set up environment variables:**
-
-   **Backend (`backend/.env`):**
-   ```env
-   # Database (Supabase PostgreSQL)
-   DATABASE_URL="postgresql://user:password@host:5432/database?pgbouncer=true"
-   DIRECT_URL="postgresql://user:password@host:5432/database"
-
-   # Server
-   PORT=4000
-   CORS_ORIGIN=http://localhost:5173,http://localhost:5174
-
-   # JWT Secret (change in production)
-   JWT_SECRET=your-super-secret-jwt-key
-
-   # Demo Mode (false in production)
-   DEMO_MODE=false
-
-   # Email (Nodemailer - Gmail, SendGrid, etc.)
-   EMAIL_USER=your-email@gmail.com
-   EMAIL_PASS=your-app-password
-
-   # AI Service (optional)
-   AI_SERVICE_URL=http://localhost:8000
-   AI_INTERNAL_KEY=your-secret-key
-   ```
-
-   **Frontend (`frontend/.env` optional):**
-   ```env
-   VITE_API_BASE_URL=http://localhost:4000
-   ```
-
-4. **Database setup:**
-   ```bash
-   # Push Prisma schema to database (creates tables)
-   npm run db:push
-
-   # Seed default data (packages, add-ons, vouchers, admin user)
-   npm run db:seed
-   ```
-
----
-
-## Running the Project
-
-### Development Mode (Frontend + Backend)
-```bash
-npm run dev
-```
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:4000/api/v1
-
-### Frontend Only
-```bash
-npm run dev:web
-```
-
-### Backend Only
-```bash
-npm run dev:api
-```
-
-### Production Build
-```bash
-npm run build
-npm start --prefix backend
-cd frontend && npm run preview
-```
-
----
-
-## Default Credentials
-
-After running `npm run db:seed`, use these credentials to login to the admin panel:
-
-- **Email:** `admin@campose.id`
-- **Password:** `admin123`
-
- **Change immediately in production.**
-
----
-
-## Project Structure
+## Monorepo Structure
 
 ```
 campose/
-├── frontend/                    # React + Vite
-│   ├── src/
-│   │   ├── app/               # App.tsx (route definitions)
-│   │   ├── pages/             # Page components (booking, admin, etc.)
-│   │   ├── features/          # Feature-specific state & components
-│   │   ├── components/        # Reusable UI components
-│   │   ├── data/              # Static data (FEATURES, VOUCHERS - catalog empty)
-│   │   ├── lib/               # Utilities (router, format, API)
-│   │   └── main.tsx           # Entry point
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── backend/                     # Express + TypeScript + Prisma
-│   ├── src/
-│   │   ├── index.ts           # Server entry
-│   │   ├── app.ts             # Express app & Socket.IO setup
-│   │   ├── routes/            # API routes (public & admin)
-│   │   ├── services/          # Business logic (booking, pricing, payments)
-│   │   ├── schemas/           # Zod validation schemas
-│   │   ├── middlewares/       # Auth, validation, error handling
-│   │   ├── lib/               # Utilities (Prisma, JWT, time, errors)
-│   │   └── uploads/           # Payment proof uploads
-│   ├── prisma/
-│   │   ├── schema.prisma      # Database schema (Packages, Addons, Bookings, etc.)
-│   │   └── seed.ts            # Seed script
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── ai-service/                  # (Placeholder) FastAPI chatbot service
-├── docs/                        # API contracts & additional docs
-├── package.json                 # Root workspace scripts
-└── README.md                    # This file
+├── frontend/       React + Vite SPA (customer booking & admin dashboard)
+├── backend/        Express + Prisma REST API & Socket.IO server
+├── ai-service/     Placeholder for RAG & chatbot integration (FastAPI)
+├── docs/           API contract & schema reference
+└── package.json    Root workspace scripts
 ```
 
 ---
 
-## API Endpoints
+## Tech Stack
 
-### Public Routes (No Auth Required)
+### Frontend
 
-**Packages & Catalog:**
-- `GET /api/v1/packages` – Fetch active packages
-- `GET /api/v1/addons` – Fetch active add-ons
-- `GET /api/v1/reviews` – Fetch published reviews
-- `GET /api/v1/terms` – Fetch T&C
+| Library | Version | Purpose |
+|---|---|---|
+| React | 19 | UI framework |
+| TypeScript | 5 | Type safety |
+| Vite | 8 | Build tooling & HMR |
+| Tailwind CSS | 4 | Utility-first styling |
+| Socket.IO Client | 4 | Realtime updates |
+| Axios | 1.7 | HTTP client |
 
-**Availability & Booking:**
-- `GET /api/v1/availability?month=YYYY-MM` – Month status
-- `GET /api/v1/availability/slots?date=YYYY-MM-DD&hours=2` – Available time slots
-- `GET /api/v1/blocked-dates` – Holiday/blocked dates
-- `POST /api/v1/bookings` – Create booking
-- `GET /api/v1/bookings/:code` – Get booking details
+Deployed on **Vercel** (auto-deploy from `main` branch).
 
-**Vouchers & Pricing:**
-- `GET /api/v1/vouchers/:code` – Validate voucher
-- `POST /api/v1/bookings/quote` – Calculate booking total
+### Backend
 
-**Payments:**
-- `POST /api/v1/bookings/:code/payments` – Create payment record
-- `GET /api/v1/bookings/:code/payment-status` – Check payment status
-- `POST /api/v1/payments/:id/upload-proof` – Upload payment proof
+| Library | Version | Purpose |
+|---|---|---|
+| Express | 4 | REST API |
+| TypeScript | 5 | Type safety |
+| Prisma | 6 | PostgreSQL ORM |
+| Socket.IO | 4 | Realtime event broadcasting |
+| Nodemailer | 10 | SMTP email notifications |
+| Zod | 3 | Request schema validation |
+| jsonwebtoken | 9 | JWT admin auth |
+| bcryptjs | 3 | Password hashing |
+| Multer | 2 | File upload (payment proofs) |
+| Helmet | 8 | Security headers |
 
-### Admin Routes (JWT Auth Required)
+Self-hosted on **Azure Ubuntu VPS** with **PM2** (process manager) and **Caddy** (reverse proxy + TLS).
 
-**Authentication:**
-- `POST  ` – Admin login
+### AI Service
 
-**Dashboard & Bookings:**
-- `GET /api/v1/admin/stats` – Dashboard statistics
-- `GET /api/v1/admin/bookings?page=1&limit=100` – List bookings
-- `GET /api/v1/admin/bookings/:code` – Booking details
-- `PATCH /api/v1/admin/bookings/:code/reschedule` – Reschedule
-- `PATCH /api/v1/admin/bookings/:code/cancel` – Cancel
-- `POST /api/v1/admin/bookings/manual` – Create manual booking
-
-**Calendar & Availability:**
-- `GET /api/v1/admin/availability` – All availability overrides
-- `POST /api/v1/admin/availability` – Set date status (TERSEDIA, PENUH, LIBUR)
-- `DELETE /api/v1/admin/availability/:date` – Remove override
-
-**Packages & Add-ons:**
-- `GET /api/v1/admin/packages` – List all packages
-- `PATCH /api/v1/admin/packages/:id` – Update package (name, price, hours, isPopular, isActive)
-- `GET /api/v1/admin/addons` – List all add-ons
-- `POST /api/v1/admin/addons` – Create add-on
-- `PATCH /api/v1/admin/addons/:id` – Update add-on
-- `DELETE /api/v1/admin/addons/:id` – Delete add-on
-
-**Vouchers:**
-- `GET /api/v1/admin/vouchers` – List vouchers
-- `POST /api/v1/admin/vouchers` – Create voucher
-- `PUT /api/v1/admin/vouchers/:code` – Update voucher
-- `DELETE /api/v1/admin/vouchers/:code` – Delete voucher
-
-**Payments:**
-- `POST /api/v1/admin/payments/:id/confirm` – Confirm payment
-- `POST /api/v1/admin/payments/:id/reject` – Reject payment
-- `GET /api/v1/admin/payments` – List payments
-- `GET /api/v1/admin/payments/:id` – Payment details
+Folder structure prepared under `ai-service/` for upcoming FastAPI service (intent classification, RAG-based chatbot). Contract defined in `docs/API-CONTRACT.md`. The AI service is called only by the backend — never directly by the frontend.
 
 ---
 
-## 🗄 Database Schema
+## Key Features
 
-Key tables managed by Prisma:
+### Customer Booking
+- Database-driven package & add-on pricing (no hardcoded values)
+- Promo voucher validation at checkout
+- Realtime calendar availability synced via Socket.IO
+- Multi-step booking flow: package → date/time → event details → add-ons → payment
+- Manual payment proof upload
+- Native `@media print` printable invoices
 
-- **Package** – Photobooth packages (2 Jam, 4 Jam, 8 Jam, etc.)
-- **Addon** – Add-on services (costumes, extra prints, etc.)
-- **Booking** – Customer bookings with status (MENUNGGU_PEMBAYARAN, TERKONFIRMASI, SELESAI, DIBATALKAN)
-- **Payment** – Payment records (status: PENDING, PAID, FAILED, DITOLAK, KEDALUWARSA)
-- **Availability** – Calendar overrides (TERSEDIA, PENUH, DIBOOKING, LIBUR)
-- **Voucher** – Discount codes
-- **Review** – Customer reviews
-- **AdminUser** – Admin accounts with JWT auth
-- **Setting** – Global settings (T&C, etc.)
+### Admin Dashboard
+- Realtime booking & payment notifications via Socket.IO
+- Manual payment verification (confirm / reject with admin notes)
+- Calendar management: mark dates as Tersedia, Penuh, or Libur
+- Package, add-on, voucher, and terms & conditions management
+- Manual booking creation (e.g. from WhatsApp inquiries)
+- Printable admin invoices
 
-See `backend/prisma/schema.prisma` for full schema.
+### Email Notifications
+- Booking confirmation email to customer on payment approval
+- Rejection notification with admin notes on payment decline
+- Admin notification on payment proof upload with:
+  - `Reply-To` set to customer's email
+  - Direct link to uploaded proof image
+  - Direct link to admin dashboard booking detail
+
+### Admin Auth & RBAC
+- JWT authentication with 7-day token expiry
+- Automatic 401 session handling — expired tokens clear storage and redirect to login with message
+- Dynamic admin profile header (name, role, avatar initial from logged-in account)
+- Role-based access: only `OWNER` can create or delete admin accounts
+- Safety guards: cannot delete own account, cannot delete last remaining `OWNER`
+- Three roles: `OWNER`, `ADMIN`, `CS`
 
 ---
 
-## Real-time Events (Socket.IO)
+## Local Development Setup
 
-Admins & customers receive instant updates via WebSocket:
+### Prerequisites
 
-- `catalog:updated` – Packages/add-ons/vouchers changed
-- `availability:updated` – Calendar dates marked as holiday/full/available
-- `booking:created` – New booking submitted
-- `payment:confirmed` – Payment verified
-- `booking:updated` – Booking rescheduled/cancelled
+- **Node.js** 18+
+- **PostgreSQL** database (local, Neon, or any managed PostgreSQL)
 
----
+### Installation
 
-## Email Notifications
+```bash
+git clone <repository-url>
+cd campose
 
-The system sends automated emails for:
-- **Booking Confirmation** – Invoice, package details, payment instructions
-- **Payment Reminder** – If payment deadline approaching
-- **Payment Confirmation** – When admin verifies payment
+# Install root + all sub-project dependencies
+npm install
+npm run setup
+```
 
-Configure in `backend/.env`:
+### Database Setup
+
+```bash
+# Push Prisma schema to database (creates/updates tables)
+npm run db:push
+
+# Seed default data (packages, add-ons, voucher, admin user, terms)
+npm run db:seed
+```
+
+### Environment Variables
+
+**`backend/.env`**
+
 ```env
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/campose"
+DIRECT_URL="postgresql://user:password@localhost:5432/campose"
+
+# Server
+PORT=4000
+CORS_ORIGIN=http://localhost:5173
+
+# Auth
+JWT_SECRET=change-me-to-a-strong-random-string
+
+# Email (Option A: custom SMTP)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-user
+SMTP_PASS=your-smtp-password
+
+# Email (Option B: Gmail — omit SMTP_HOST to use Gmail service)
 EMAIL_USER=your-email@gmail.com
-EMAIL_PASS=app-specific-password  # For Gmail, use App Password
+EMAIL_PASS=your-app-password
+
+# Email display
+SMTP_FROM="Campose Photobooth <hello@campose.id>"
+
+# Admin email notifications (comma-separated)
+ADMIN_NOTIFICATION_EMAIL=admin@campose.id
+
+# Public URLs used in email templates
+API_PUBLIC_URL=http://localhost:4000
+ADMIN_DASHBOARD_URL=http://localhost:5173/admin
 ```
 
+**`frontend/.env`**
+
+```env
+VITE_API_URL=http://localhost:4000
+```
+
+### Running Locally
+
+```bash
+# Frontend + Backend concurrently
+npm run dev
+
+# Frontend only (http://localhost:5173)
+npm run dev:web
+
+# Backend only (http://localhost:4000)
+npm run dev:api
+```
+
+### Default Admin Credentials
+
+After `npm run db:seed`:
+
+| Field | Value |
+|---|---|
+| Email | `admin@campose.id` |
+| Password | `admin123` |
+
+**Change immediately in production.**
+
 ---
 
-## Testing
+## Available Scripts
 
-### Test Admin Calendar Holiday Blocking
-1. Login: http://localhost:5173/admin → admin@campose.id / admin123
-2. Go to Calendar: http://localhost:5173/admin/kalender
-3. Click a date → "Atur" tab → Select "Libur" → Save
-4. Verify Supabase: `Availability` table shows `status = 'LIBUR'`
-5. Customer booking page should disable that date
+| Script | Description |
+|---|---|
+| `npm run dev` | Run frontend + backend concurrently |
+| `npm run dev:web` | Frontend only |
+| `npm run dev:api` | Backend only |
+| `npm run build` | Build both frontend and backend |
+| `npm run setup` | Install dependencies for frontend + backend |
+| `npm run db:push` | Push Prisma schema to database |
+| `npm run db:seed` | Seed default data |
 
-### Test Dynamic Pricing
-1. Go to: http://localhost:5173/booking-photobooth
-2. Admin changes a package price via API or admin panel
-3. Customer page reloads → new price displays
-4. Socket.IO broadcasts `catalog:updated` in real-time
+### Backend-specific (`backend/`)
 
-### Test Booking Submission
-1. Select package → date/time → details → add-ons → submit
-2. Backend validates:
-   - Package exists & is active
-   - Date is not blocked (LIBUR)
-   - Time slot is free
-   - Pricing recalculated from database (client prices ignored)
-3. Confirmation email sent
-4. Payment record created
-5. Admin sees new booking in dashboard
+| Script | Description |
+|---|---|
+| `npm run dev` | Watch mode with tsx |
+| `npm run build` | TypeScript compile (`tsc`) |
+| `npm start` | Run compiled `dist/index.js` |
+| `npm run typecheck` | Type check without emitting |
+| `npm run db:studio` | Open Prisma Studio |
+
+### Frontend-specific (`frontend/`)
+
+| Script | Description |
+|---|---|
+| `npm run dev` | Vite dev server |
+| `npm run build` | Type check + Vite production build |
+| `npm run preview` | Preview production build |
 
 ---
 
-## Important Notes
+## Database Schema
 
-### No Hardcoded Pricing
-- All package & add-on prices fetched from database at runtime
-- Client calculations verified server-side
-- `catalog.ts` contains only static UI text (FEATURES, VOUCHERS empty)
+Key tables managed by Prisma (see `backend/prisma/schema.prisma`):
 
-### Holiday/Blocked Dates (LIBUR)
-- Admin marks dates as LIBUR via calendar or API
-- Customers see them disabled (visual: red/grey highlight)
-- Backend rejects bookings on LIBUR dates with error message
-- Real-time Socket.IO sync updates all clients
+| Table | Purpose |
+|---|---|
+| `Package` | Photobooth packages (2 Jam, 4 Jam, 8 Jam) |
+| `Addon` | Add-on services (costumes, prints, extras) |
+| `Booking` | Customer bookings (MENUNGGU_PEMBAYARAN → TERKONFIRMASI → SELESAI / DIBATALKAN) |
+| `Payment` | Payment records (PENDING → MENUNGGU_KONFIRMASI → PAID / DITOLAK) |
+| `Availability` | Calendar date overrides (TERSEDIA, PENUH, DIBOOKING, LIBUR) |
+| `Voucher` | Discount codes |
+| `Review` | Customer reviews |
+| `AdminUser` | Admin accounts with roles (OWNER, ADMIN, CS) |
+| `Setting` | Global settings (terms & conditions, etc.) |
+| `ChatSession` / `ChatMessage` | Chatbot conversation logs |
+| `PartnershipLead` | Partnership/franchise inquiry leads |
 
-### Security
-- Admin routes protected by JWT (Authorization header)
-- Passwords hashed with bcryptjs
-- Input validated with Zod schemas
-- CORS configured for localhost (adjust in production)
-- Helmet applied for security headers
+---
 
-### Payment Flow (Manual)
-- Current: Manual verification (customer uploads proof, admin confirms/rejects)
-- Future: Integrate Midtrans/Xendit for automatic processing
-- Logic isolated in `backend/src/services/payment-manual.service.ts`
+## Realtime Events (Socket.IO)
+
+| Event | Trigger |
+|---|---|
+| `catalog:updated` | Package, add-on, or voucher modified |
+| `availability:updated` | Calendar date status changed |
+| `booking:created` | New booking submitted |
+| `booking:updated` | Booking rescheduled or cancelled |
+| `payment:confirmed` | Admin confirms payment |
+| `payment:rejected` | Admin rejects payment |
+| `payment:proof_uploaded` | Customer uploads payment proof |
+
+---
+
+## Deployment Overview
+
+### Frontend (Vercel)
+
+Automatically deployed on push to `main` branch. Vercel project is configured with the `VITE_API_URL` environment variable pointing to the production API.
+
+### Backend (Azure VPS)
+
+```bash
+ssh your-vps
+cd /path/to/campose/backend
+git pull origin main
+npm install
+npm run build
+pm2 restart all
+```
+
+Caddy handles HTTPS termination and reverse proxy to the Node.js process.
 
 ---
 
 ## Troubleshooting
 
-**Issue:** Frontend shows "Failed to load packages"
-- Check backend running: `http://localhost:4000/api/v1/packages`
-- Verify `.env` DATABASE_URL is correct
-- Run `npm run db:seed` to populate data
-
-**Issue:** Calendar dates not marking as LIBUR
-- Check browser console for API errors
-- Verify JWT token in Authorization header
-- Check backend logs for Prisma errors
-- Ensure `DateStatus` enum includes LIBUR in schema
-
-**Issue:** Emails not sending
-- Check EMAIL_USER and EMAIL_PASS in `.env`
-- For Gmail, use [App Password](https://myaccount.google.com/apppasswords)
-- Check backend logs for nodemailer errors
-
-**Issue:** Socket.IO not syncing in real-time
-- Ensure frontend connects to correct BASE_URL
-- Check browser WebSocket connection
-- Verify CORS_ORIGIN in backend `.env`
+| Problem | Fix |
+|---|---|
+| Frontend "Failed to load packages" | Verify backend is running and `VITE_API_URL` / `DATABASE_URL` are correct. Run `npm run db:seed`. |
+| Calendar dates not saving | Check JWT token validity, backend logs for Prisma errors. |
+| Emails not sending | Verify `SMTP_*` or `EMAIL_*` env vars. For Gmail, use an [App Password](https://myaccount.google.com/apppasswords). |
+| Socket.IO not syncing | Verify `CORS_ORIGIN` includes frontend URL. Check browser WebSocket connection. |
+| Admin dashboard empty after login | Token may be expired. 401 handling should auto-redirect to login. Clear browser storage and re-login. |
 
 ---
 
-## Environment Checklist
+## References
 
-Before deploying to production:
-- [ ] Change `JWT_SECRET` to strong random string
-- [ ] Set `DEMO_MODE=false`
-- [ ] Update `CORS_ORIGIN` to production domain
-- [ ] Configure `EMAIL_USER` and `EMAIL_PASS`
-- [ ] Use managed PostgreSQL (Supabase, RDS, etc.)
-- [ ] Change default admin credentials
-- [ ] Enable HTTPS for all endpoints
-- [ ] Configure rate limiting & DDoS protection
-- [ ] Set up monitoring & logging
-
----
-
-## Support & Contribution
-
-For questions or issues, refer to:
-- API Contract: `docs/API-CONTRACT.md`
-- Database Schema: `backend/prisma/schema.prisma`
-- Feature Branch: Check git history for latest changes
+- API Contract: [`docs/API-CONTRACT.md`](docs/API-CONTRACT.md)
+- Database Schema: [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma)
 
 ---
 
 ## License
 
-Campose © 2026 Asah Program Team A26-CS263. All rights reserved.
-
----
-
-**Happy booking!**
+Campose &copy; 2026 Asah Program Team A26-CS263. All rights reserved.
