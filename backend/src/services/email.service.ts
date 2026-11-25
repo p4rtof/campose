@@ -30,7 +30,25 @@ function getTransporter() {
 }
 
 const transporter = getTransporter()
-const DEFAULT_FROM = process.env.SMTP_FROM || '"Campose Photobooth" <hello@campose.id>'
+
+// DEFAULT_FROM menyesuaikan akun Gmail yang dikonfigurasi agar cocok dengan akun SMTP
+const DEFAULT_FROM =
+  process.env.SMTP_FROM ||
+  `"Campose Photobooth" <${process.env.SMTP_USER || process.env.EMAIL_USER || 'hello@campose.id'}>`
+
+/**
+ * Kembalikan daftar email admin tujuan notifikasi.
+ * Baca dari ADMIN_NOTIFICATION_EMAIL (comma-separated), fallback ke akun SMTP.
+ */
+function getAdminNotificationEmails(): string[] {
+  const raw = process.env.ADMIN_NOTIFICATION_EMAIL
+  if (raw) {
+    const list = raw.split(',').map((e) => e.trim()).filter(Boolean)
+    if (list.length > 0) return list
+  }
+  const fallback = process.env.SMTP_USER || process.env.EMAIL_USER
+  return fallback ? [fallback] : []
+}
 
 export interface BookingEmailData {
   code: string
@@ -174,9 +192,11 @@ export async function sendBookingConfirmedEmail(data: BookingEmailData) {
   `
 
   try {
+    const adminEmails = getAdminNotificationEmails()
     const info = await transporter.sendMail({
       from: DEFAULT_FROM,
       to: data.email,
+      replyTo: adminEmails[0] || DEFAULT_FROM,
       subject: `[Campose Photobooth] Konfirmasi Pembayaran Booking ${data.code} Disetujui!`,
       html,
     })
@@ -270,9 +290,11 @@ export async function sendBookingRejectedEmail(data: BookingEmailData, reason?: 
   `
 
   try {
+    const adminEmails = getAdminNotificationEmails()
     const info = await transporter.sendMail({
       from: DEFAULT_FROM,
       to: data.email,
+      replyTo: adminEmails[0] || DEFAULT_FROM,
       subject: `[Campose Photobooth] Bukti Pembayaran Perlu Diperbaiki - Booking ${data.code}`,
       html,
     })
@@ -364,17 +386,212 @@ export async function sendPartnershipEmail(data: PartnershipEmailData) {
   `
 
   try {
+    // Gunakan env ADMIN_NOTIFICATION_EMAIL, fallback ke fadhla153@gmail.com
+    const adminEmails = getAdminNotificationEmails()
+    const recipients = adminEmails.length > 0 ? adminEmails : ['fadhla153@gmail.com']
     const info = await transporter.sendMail({
       from: DEFAULT_FROM,
-      to: 'fadhla153@gmail.com',
+      to: recipients.join(', '),
       replyTo: data.email,
       subject: `[Campose] Pengajuan ${data.jenis} Baru dari ${data.nama}`,
       html,
     })
-    console.log(`Email kemitraan terkirim ke campose.indonesia@gmail.com dari ${data.email}. MessageId:`, info.messageId || 'local-json')
+    console.log(`✉️  Email kemitraan terkirim ke ${recipients.join(', ')} dari ${data.email}. MessageId:`, info.messageId || 'local-json')
     return { success: true, info }
   } catch (err) {
-    console.error(`Gagal mengirim email kemitraan:`, err)
+    console.error(`❌ Gagal mengirim email kemitraan:`, err)
+    return { success: false, error: err }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin payment-proof notification
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AdminPaymentNotifData {
+  /** Kode booking, contoh: CMP-2026-0042 */
+  code: string
+  /** Nama customer */
+  customerName: string
+  /** Email customer (dipakai sebagai replyTo) */
+  email: string
+  /** Nomor WhatsApp customer, format bebas */
+  whatsapp: string
+  /** Nama paket, misal "Paket Bronze 2 Jam" */
+  packageName: string
+  /** Add-on yang dipilih */
+  addons?: Array<{ name: string; qty: number; price: number }>
+  /** Tanggal acara */
+  eventDate: Date | string
+  /** Waktu mulai, contoh "09.00" */
+  startTime: string
+  /** Waktu selesai, contoh "11.00" */
+  endTime: string
+  /** Lokasi / venue */
+  location: string
+  /** Metode pembayaran */
+  method: string
+  /** Total tagihan dalam Rupiah */
+  total: number
+  /** URL publik foto bukti bayar */
+  proofUrl: string
+  /** true jika ini adalah re-upload setelah ditolak */
+  isReupload: boolean
+  /** Waktu customer upload (default: now) */
+  uploadedAt?: Date
+}
+
+/**
+ * Kirim email notifikasi ke admin saat customer upload (atau re-upload) bukti pembayaran.
+ * Fire-and-forget — gunakan .catch() di pemanggil agar tidak memblokir response HTTP.
+ */
+export async function sendAdminPaymentNotificationEmail(data: AdminPaymentNotifData) {
+  const adminEmails = getAdminNotificationEmails()
+  if (adminEmails.length === 0) {
+    console.warn('⚠️  Tidak ada ADMIN_NOTIFICATION_EMAIL / SMTP_USER di .env — email notifikasi admin dilewati.')
+    return { success: false }
+  }
+
+  const apiBase    = process.env.API_PUBLIC_URL || 'https://api.campose.web.id'
+  const adminUrl   = `${process.env.ADMIN_DASHBOARD_URL || 'https://campose.web.id/admin'}/pembayaran`
+  const uploadedAt = data.uploadedAt || new Date()
+
+  const uploadedAtStr = uploadedAt.toLocaleString('id-ID', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta',
+  }) + ' WIB'
+
+  const formattedDate  = formatDateIndo(data.eventDate)
+  const formattedTotal = formatRupiah(data.total)
+
+  // Format nomor WA untuk link wa.me (hapus awalan 0, ganti dengan 62)
+  const waNumber = data.whatsapp.replace(/^0/, '62').replace(/\D/g, '')
+  const waLink   = `https://wa.me/${waNumber}`
+
+  const addonRows = (data.addons && data.addons.length > 0)
+    ? data.addons.map((a) =>
+        `<div class="row"><span class="label">+ ${a.name} (${a.qty}x)</span><span class="value">${formatRupiah(a.price * a.qty)}</span></div>`
+      ).join('\n')
+    : '<div class="row"><span class="label" style="color:#94a3b8;font-style:italic;">Tidak ada add-on</span><span class="value">–</span></div>'
+
+  const isReupload  = data.isReupload
+  const badgeColor  = isReupload ? '#f59e0b' : '#3b82f6'
+  const badgeText   = isReupload ? '🔁 UPLOAD ULANG BUKTI PEMBAYARAN' : '🔔 MENUNGGU KONFIRMASI PEMBAYARAN'
+  const headerGrad  = isReupload
+    ? 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
+    : 'linear-gradient(135deg, #1A76D2 0%, #0D47A1 100%)'
+
+  // Tentukan apakah proofUrl sudah absolute atau masih path relatif
+  const proofAbsolute = data.proofUrl.startsWith('http') ? data.proofUrl : `${apiBase}${data.proofUrl}`
+
+  const html = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notifikasi Bukti Pembayaran – Campose</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f6f8fb; margin: 0; padding: 24px; color: #1e293b; }
+    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .header { background: ${headerGrad}; padding: 32px 24px; text-align: center; color: #ffffff; }
+    .header h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+    .header p { margin: 8px 0 0; font-size: 13px; opacity: 0.9; }
+    .badge { display: inline-block; background-color: ${badgeColor}; color: #fff; padding: 6px 16px; border-radius: 9999px; font-size: 12px; font-weight: 700; margin-top: 14px; letter-spacing: 0.5px; }
+    .body { padding: 32px 24px; }
+    .intro { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 24px; }
+    .card { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+    .card-title { font-size: 14px; font-weight: 700; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 14px; }
+    .row { display: flex; justify-content: space-between; margin-bottom: 9px; font-size: 13px; gap: 12px; }
+    .row .label { color: #64748b; font-weight: 500; }
+    .row .value { color: #0f172a; font-weight: 600; text-align: right; }
+    .row .value a { color: #1a76d2; text-decoration: none; }
+    .total-row { border-top: 1px dashed #cbd5e1; padding-top: 12px; margin-top: 10px; font-size: 14px; }
+    .total-row .value { color: #1a76d2; font-size: 16px; font-weight: 800; }
+    .proof-box { text-align: center; margin-bottom: 20px; }
+    .proof-box img { max-width: 100%; border-radius: 10px; border: 2px solid #e2e8f0; max-height: 300px; object-fit: cover; }
+    .proof-link { display: inline-block; margin-top: 10px; font-size: 12px; color: #1a76d2; text-decoration: none; word-break: break-all; }
+    .cta { text-align: center; margin: 24px 0 8px; }
+    .btn { display: inline-block; background-color: #1a76d2; color: #ffffff !important; text-decoration: none; padding: 13px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; }
+    .footer { background-color: #f1f5f9; padding: 20px 24px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>CAMPOSE PHOTOBOOTH</h1>
+      <p>Notifikasi Admin – Verifikasi Bukti Pembayaran</p>
+      <div class="badge">${badgeText}</div>
+    </div>
+    <div class="body">
+      <p class="intro">
+        ${isReupload
+          ? `Customer telah <b>mengupload ulang</b> bukti pembayaran untuk booking <b>${data.code}</b> setelah sebelumnya ditolak. Silakan verifikasi kembali.`
+          : `Ada <b>bukti pembayaran baru</b> yang perlu dikonfirmasi untuk booking <b>${data.code}</b>. Segera verifikasi melalui dashboard admin.`
+        }
+      </p>
+
+      <!-- Data Customer & Booking -->
+      <div class="card">
+        <div class="card-title">👤 Data Customer & Booking</div>
+        <div class="row"><span class="label">Kode Booking</span><span class="value">${data.code}</span></div>
+        <div class="row"><span class="label">Nama Customer</span><span class="value">${data.customerName}</span></div>
+        <div class="row"><span class="label">Email</span><span class="value"><a href="mailto:${data.email}">${data.email}</a></span></div>
+        <div class="row"><span class="label">WhatsApp</span><span class="value"><a href="${waLink}" target="_blank">${data.whatsapp}</a></span></div>
+        <div class="row"><span class="label">Paket</span><span class="value">${data.packageName}</span></div>
+        <div class="row"><span class="label">Tanggal Acara</span><span class="value">${formattedDate}</span></div>
+        <div class="row"><span class="label">Waktu Layanan</span><span class="value">${data.startTime} – ${data.endTime} WIB</span></div>
+        <div class="row"><span class="label">Lokasi / Venue</span><span class="value">${data.location}</span></div>
+        <div class="row"><span class="label">Metode Bayar</span><span class="value">${data.method.replace(/_/g, ' ')}</span></div>
+        <div class="row"><span class="label">Waktu Upload</span><span class="value">${uploadedAtStr}</span></div>
+      </div>
+
+      <!-- Rincian Pembayaran -->
+      <div class="card">
+        <div class="card-title">💰 Rincian Pembayaran</div>
+        ${addonRows}
+        <div class="row total-row"><span class="label">Total Tagihan</span><span class="value">${formattedTotal}</span></div>
+      </div>
+
+      <!-- Preview Bukti Bayar -->
+      <div class="card">
+        <div class="card-title">🧾 Bukti Pembayaran</div>
+        <div class="proof-box">
+          <img src="${proofAbsolute}" alt="Bukti Pembayaran ${data.code}" />
+          <br/>
+          <a href="${proofAbsolute}" class="proof-link" target="_blank">🔗 Buka gambar penuh di tab baru</a>
+        </div>
+      </div>
+
+      <div class="cta">
+        <a href="${adminUrl}" class="btn">🔍 Buka Dashboard Admin – Verifikasi Sekarang</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p><b>Campose Photobooth Admin System</b><br/>Notifikasi otomatis — jangan balas email ini langsung.</p>
+      <p style="margin-top:6px;color:#94a3b8;">Balas email ini untuk menghubungi customer <b>${data.customerName}</b> secara langsung.</p>
+    </div>
+  </div>
+</body>
+</html>
+  `
+
+  const subject = isReupload
+    ? `[Campose] Upload Ulang Bukti Pembayaran - ${data.code} (${data.customerName})`
+    : `[Campose] Bukti Pembayaran Baru - ${data.code} (${data.customerName})`
+
+  try {
+    const info = await transporter.sendMail({
+      from: DEFAULT_FROM,
+      to: adminEmails.join(', '),
+      replyTo: data.email,
+      subject,
+      html,
+    })
+    console.log(`✉️  Notifikasi admin terkirim ke ${adminEmails.join(', ')} (${data.code}). MessageId:`, info.messageId || 'local-json')
+    return { success: true, info }
+  } catch (err) {
+    console.error(`❌ Gagal mengirim notifikasi admin untuk ${data.code}:`, err)
     return { success: false, error: err }
   }
 }
