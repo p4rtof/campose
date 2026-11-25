@@ -534,23 +534,23 @@ export async function sendAdminPaymentNotificationEmail(data: AdminPaymentNotifD
       <!-- Data Customer & Booking -->
       <div class="card">
         <div class="card-title">👤 Data Customer & Booking</div>
-        <div class="row"><span class="label">Kode Booking</span><span class="value">${data.code}</span></div>
-        <div class="row"><span class="label">Nama Customer</span><span class="value">${data.customerName}</span></div>
-        <div class="row"><span class="label">Email</span><span class="value"><a href="mailto:${data.email}">${data.email}</a></span></div>
-        <div class="row"><span class="label">WhatsApp</span><span class="value"><a href="${waLink}" target="_blank">${data.whatsapp}</a></span></div>
-        <div class="row"><span class="label">Paket</span><span class="value">${data.packageName}</span></div>
-        <div class="row"><span class="label">Tanggal Acara</span><span class="value">${formattedDate}</span></div>
-        <div class="row"><span class="label">Waktu Layanan</span><span class="value">${data.startTime} – ${data.endTime} WIB</span></div>
-        <div class="row"><span class="label">Lokasi / Venue</span><span class="value">${data.location}</span></div>
-        <div class="row"><span class="label">Metode Bayar</span><span class="value">${data.method.replace(/_/g, ' ')}</span></div>
-        <div class="row"><span class="label">Waktu Upload</span><span class="value">${uploadedAtStr}</span></div>
+        <div class="row"><span class="label">Kode Booking : </span><span class="value">${data.code}</span></div>
+        <div class="row"><span class="label">Nama Customer : </span><span class="value">${data.customerName}</span></div>
+        <div class="row"><span class="label">Email : </span><span class="value"><a href="mailto:${data.email}">${data.email}</a></span></div>
+        <div class="row"><span class="label">WhatsApp : </span><span class="value"><a href="${waLink}" target="_blank">${data.whatsapp}</a></span></div>
+        <div class="row"><span class="label">Paket : </span><span class="value">${data.packageName}</span></div>
+        <div class="row"><span class="label">Tanggal Acara : </span><span class="value">${formattedDate}</span></div>
+        <div class="row"><span class="label">Waktu Layanan : </span><span class="value">${data.startTime} – ${data.endTime} WIB</span></div>
+        <div class="row"><span class="label">Lokasi / Venue : </span><span class="value">${data.location}</span></div>
+        <div class="row"><span class="label">Metode Bayar : </span><span class="value">${data.method.replace(/_/g, ' ')}</span></div>
+        <div class="row"><span class="label">Waktu Upload : </span><span class="value">${uploadedAtStr}</span></div>
       </div>
 
       <!-- Rincian Pembayaran -->
       <div class="card">
-        <div class="card-title">💰 Rincian Pembayaran</div>
+        <div class="card-title">💰 Rincian Pembayaran : </div>
         ${addonRows}
-        <div class="row total-row"><span class="label">Total Tagihan</span><span class="value">${formattedTotal}</span></div>
+        <div class="row total-row"><span class="label">Total Tagihan : </span><span class="value">${formattedTotal}</span></div>
       </div>
 
       <!-- Preview Bukti Bayar -->
